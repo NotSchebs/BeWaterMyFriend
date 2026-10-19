@@ -1,18 +1,23 @@
+import SwiftData
 import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "drop.fill")
-                .font(.system(size: 64))
-                .foregroundStyle(.tint)
-            Text("Be water, my friend")
-                .font(.title2.bold())
+        TabView {
+            Tab("Today", systemImage: "drop.fill") {
+                TodayView()
+            }
+            Tab("History", systemImage: "calendar") {
+                HistoryView()
+            }
+            Tab("Settings", systemImage: "gearshape") {
+                SettingsView()
+            }
         }
-        .padding()
     }
 }
 
 #Preview {
     ContentView()
+        .modelContainer(PreviewData.container)
 }

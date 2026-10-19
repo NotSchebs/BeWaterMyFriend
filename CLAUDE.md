@@ -4,8 +4,8 @@ BeWaterMyFriend: SwiftUI + SwiftData hydration tracker for iPhone, later with He
 
 ## Ownership rules (from the exposé — follow these)
 
-- **The developer writes the data model and calculation logic** (SwiftData models, daily totals, custom day boundary, goal calculation) themselves or with minimal help. For these, Claude explains, reviews, and writes *tests*, but does not write the implementation unless explicitly asked.
-- Claude may write SwiftUI views and boilerplate more freely.
+- **The developer designs the data model and calculation logic** (fields, types, what's optional, how values are stored). Originally the developer also wrote the implementation; on 19 Oct the developer asked Claude to implement the MVP from that design. From now on, Claude may implement, but must explain non-obvious choices so the developer can explain every core file, and every core logic change needs tests.
+- Claude may write SwiftUI views and boilerplate freely.
 - Every HealthKit snippet must cite the Apple documentation it relies on, so it can be checked.
 - Small steps, one feature at a time. After each step, suggest a one-line diary entry (what was done, the decision, and whether it worked).
 
@@ -20,4 +20,7 @@ BeWaterMyFriend: SwiftUI + SwiftData hydration tracker for iPhone, later with He
 
 - Swift, SwiftUI, SwiftData, HealthKit (Phase 2), XCTest
 - Test-driven for daily/weekly/monthly totals, the day boundary and goal calculation. UI is checked manually.
+- Layout: `Model/` (SwiftData models, `Nutrients`), `Logic/` (pure calculations: `DrinkMath`, `DayBoundary`, `Summaries`), `Views/`. Tests mirror `Logic/` and `Model/`.
+- Nutrients are stored **per 100 ml**; totals are always computed from the current volume. They are saved as encoded `Data` (see `NutrientStorage`) because SwiftData crashes when reloading a struct whose fields are all nil.
+- Days with no entries are "no data", never zero. Day boundaries go through `Calendar` (DST-safe), never `+ 86400`.
 - Build/test from the CLI: `xcodebuild -scheme BeWaterMyFriend -destination 'platform=iOS Simulator,name=iPhone 18 Pro' test`
