@@ -55,13 +55,6 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
         }
     }
 
-    /// Whether this category's fluid counts toward the water goal.
-    /// Design decision (transparent, not a medical claim): every non-alcoholic
-    /// drink counts fully; alcoholic drinks are tracked separately and don't count.
-    var countsTowardGoal: Bool {
-        !isAlcoholic
-    }
-
     var isAlcoholic: Bool {
         switch self {
         case .beer, .wine, .spirits, .cocktail: true

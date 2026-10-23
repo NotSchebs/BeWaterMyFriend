@@ -13,6 +13,24 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(entry.caffeineMg, 50, accuracy: 0.0001)
     }
 
+    func testNeedsHealthWriteUntilWrittenAndAgainAfterEdit() {
+        let entry = DrinkEntry(name: "Water", category: .water, volumeML: 250)
+        XCTAssertTrue(entry.needsHealthWrite)
+        entry.healthWrittenAt = .now.addingTimeInterval(1)
+        XCTAssertFalse(entry.needsHealthWrite)
+
+        var draft = DrinkDraft(entry: entry)
+        draft.volumeML = 300
+        entry.healthWrittenAt = .now.addingTimeInterval(-1)
+        draft.apply(to: entry)
+        XCTAssertTrue(entry.needsHealthWrite, "an edit after the write must be written again")
+    }
+
+    func testPresetCopiesHydrationPercentToEntry() {
+        let preset = DrinkPreset(name: "Iced tea", category: .tea, volumeML: 500, hydrationPercent: 80)
+        XCTAssertEqual(preset.makeEntry().hydrationML, 400)
+    }
+
     func testEntryFromPresetIsAnIndependentCopy() {
         let preset = DrinkPreset(name: "Espresso", category: .coffee, volumeML: 30)
         let entry = preset.makeEntry(at: date(2026, 10, 16, 8))

@@ -40,4 +40,21 @@ final class DrinkMathTests: XCTestCase {
     func testStandardDrinks() {
         XCTAssertEqual(DrinkMath.standardDrinks(alcoholGrams: 13.0185), 1.30185, accuracy: 0.0001)
     }
+
+    func testDefaultHydrationPercent() {
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .water, alcoholPercent: nil), 100)
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .coffee, alcoholPercent: nil), 100)
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .beer, alcoholPercent: 5), 95)
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .spirits, alcoholPercent: 40), 60)
+        // Unknown strength: no basis to reduce it.
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .wine, alcoholPercent: nil), 100)
+        // Alcohol on a non-alcoholic category is ignored.
+        XCTAssertEqual(DrinkMath.defaultHydrationPercent(category: .juice, alcoholPercent: 5), 100)
+    }
+
+    func testHydrationMLIsClampedToZeroToHundredPercent() {
+        XCTAssertEqual(DrinkMath.hydrationML(volumeML: 200, percent: 50), 100)
+        XCTAssertEqual(DrinkMath.hydrationML(volumeML: 200, percent: 150), 200)
+        XCTAssertEqual(DrinkMath.hydrationML(volumeML: 200, percent: -10), 0)
+    }
 }

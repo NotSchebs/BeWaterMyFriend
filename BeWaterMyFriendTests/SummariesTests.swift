@@ -32,12 +32,20 @@ final class SummariesTests: XCTestCase {
         XCTAssertEqual(days[1].entryCount, 2)
     }
 
-    func testAlcoholCountsInTotalButNotTowardGoal() {
+    func testBeerCountsItsNonAlcoholPartTowardGoal() {
         let day = Summaries.daily(entries: [water(500, at: date(2026, 10, 16, 12)), beer(at: date(2026, 10, 16, 20))],
                                   boundary: lateBoundary)[0]
-        XCTAssertEqual(day.goalFluidML, 500)
+        XCTAssertEqual(day.goalFluidML, 500 + 313.5, accuracy: 0.0001)  // 330 ml × 95 %
         XCTAssertEqual(day.totalFluidML, 830)
         XCTAssertEqual(day.alcoholGrams, 13.0185, accuracy: 0.0001)
+    }
+
+    func testUserHydrationPercentOverridesDefault() {
+        let tea = DrinkEntry(timestamp: date(2026, 10, 16, 9), name: "Tea", category: .tea,
+                             volumeML: 400, hydrationPercent: 50)
+        let day = Summaries.daily(entries: [tea], boundary: lateBoundary)[0]
+        XCTAssertEqual(day.goalFluidML, 200)
+        XCTAssertEqual(day.totalFluidML, 400)
     }
 
     func testCaffeineIsSummedFromPer100mlValues() {

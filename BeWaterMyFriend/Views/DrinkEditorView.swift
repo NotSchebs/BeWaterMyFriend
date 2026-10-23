@@ -74,11 +74,9 @@ struct DrinkEditorView: View {
                     } else {
                         DatePicker("Time", selection: $draft.timestamp, in: ...Date.now)
                     }
-                } footer: {
-                    if !draft.category.countsTowardGoal {
-                        Text("Alcoholic drinks are tracked separately and don't count toward your water goal.")
-                    }
                 }
+
+                hydrationSection
 
                 if draft.category.isAlcoholic {
                     Section("Alcohol") {
@@ -108,6 +106,7 @@ struct DrinkEditorView: View {
                     }
                 }
             }
+            .dojoBackground()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -123,6 +122,27 @@ struct DrinkEditorView: View {
                                 isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { delete() }
             }
+        }
+    }
+
+    private var hydrationSection: some View {
+        Section {
+            Toggle("Automatic", isOn: Binding(
+                get: { draft.hydrationPercent == nil },
+                set: { draft.hydrationPercent = $0 ? nil : draft.automaticHydrationPercent }
+            ))
+            if let percent = draft.hydrationPercent {
+                Slider(value: Binding(get: { percent }, set: { draft.hydrationPercent = $0 }),
+                       in: 0...100, step: 5)
+            }
+            LabeledContent("Counts toward goal",
+                           value: "\(Format.percent(draft.effectiveHydrationPercent / 100)) · \(Format.ml(DrinkMath.hydrationML(volumeML: draft.volumeML, percent: draft.effectiveHydrationPercent)))")
+        } header: {
+            Text("Water goal")
+        } footer: {
+            Text(draft.category.isAlcoholic
+                 ? "Automatic counts the non-alcohol part of the drink (a 5 % beer counts 95 %). An estimate, not medical advice."
+                 : "Automatic counts the whole drink. Lower it if you want this drink to count less.")
         }
     }
 
@@ -172,11 +192,12 @@ struct DrinkEditorView: View {
 
     private func delete() {
         switch mode {
-        case .editEntry(let entry): context.delete(entry)
-        case .editPreset(let preset): context.delete(preset)
+        case .editEntry(let entry): EntryActions.delete([entry], in: context)
+        case .editPreset(let preset):
+            context.delete(preset)
+            try? context.save()
         default: break
         }
-        try? context.save()
         dismiss()
     }
 }

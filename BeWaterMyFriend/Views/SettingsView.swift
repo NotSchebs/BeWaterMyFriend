@@ -5,6 +5,10 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.healthSyncEnabled) private var healthEnabled = false
+    @AppStorage(SettingsKey.healthWriteDelay) private var delayRaw = HealthWriteDelay.oneHour.rawValue
+    @Environment(\.modelContext) private var context
+    private var health = HealthSync.shared
 
     var body: some View {
         NavigationStack {
@@ -28,10 +32,10 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Toggle("Ninja drop companion", isOn: $companionEnabled)
-                } footer: {
-                    Text("A playful companion on the Today screen. It never dies or loses progress.")
+                    Toggle("Ninja drop", isOn: $companionEnabled)
                 }
+
+                healthSection
 
                 Section {
                     NavigationLink("Drink presets") {
@@ -45,8 +49,65 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .dojoBackground()
             .navigationTitle("Settings")
         }
+    }
+
+    @ViewBuilder
+    private var healthSection: some View {
+        Section {
+            if health.isAvailable {
+                Toggle("Write to Apple Health", isOn: $healthEnabled)
+                    .onChange(of: healthEnabled) { _, isOn in
+                        guard isOn else { return }
+                        Task {
+                            try? await health.requestAuthorization()
+                            await syncNow(ignoreDelay: false)
+                        }
+                    }
+                if healthEnabled {
+                    Picker("When", selection: $delayRaw) {
+                        ForEach(HealthWriteDelay.allCases) { delay in
+                            Text(delay.label).tag(delay.rawValue)
+                        }
+                    }
+                    Button {
+                        Task { await syncNow(ignoreDelay: true) }
+                    } label: {
+                        HStack {
+                            Text("Write pending drinks now")
+                            if health.isSyncing {
+                                Spacer()
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(health.isSyncing)
+                    if let error = health.lastError {
+                        Text(error)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    } else if let lastSync = health.lastSync {
+                        LabeledContent("Last checked", value: lastSync.formatted(date: .omitted, time: .shortened))
+                    }
+                }
+            } else {
+                Text("Apple Health isn't available on this device.")
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("Apple Health")
+        } footer: {
+            Text("Writes water (with each drink's percentage), caffeine, alcohol and known nutrients. Waiting gives you time to fix mistakes before they reach Health; drinks keep their original time. Edits and deletes are updated in Health too. Writing happens while the app is open.")
+        }
+    }
+
+    private func syncNow(ignoreDelay: Bool) async {
+        await health.sync(context: context,
+                          delay: HealthWriteDelay(rawValue: delayRaw) ?? .oneHour,
+                          boundary: DayBoundary(dayEndMinutes: dayEndMinutes),
+                          ignoreDelay: ignoreDelay)
     }
 
     private func timeLabel(_ minutes: Int) -> String {
@@ -110,6 +171,7 @@ struct PresetListView: View {
                 try? context.save()
             }
         }
+        .dojoBackground()
         .navigationTitle("Presets")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

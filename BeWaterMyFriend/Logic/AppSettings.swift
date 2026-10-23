@@ -6,6 +6,10 @@ enum SettingsKey {
     static let dayEndMinutes = "dayEndMinutes"
     static let companionEnabled = "companionEnabled"
     static let didSeedPresets = "didSeedPresets"
+    static let dojoBestGoalDays = "dojoBestGoalDays"
+    static let dojoBelt = "dojoBelt"
+    static let healthSyncEnabled = "healthSyncEnabled"
+    static let healthWriteDelay = "healthWriteDelay"
 }
 
 enum SettingsDefault {

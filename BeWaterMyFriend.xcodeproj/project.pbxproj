@@ -259,6 +259,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read data from Apple Health, such as workouts, to suggest a water goal.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "BeWaterMyFriend writes the drinks you log to Apple Health: water, caffeine, alcohol and known nutrients.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -290,6 +292,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read data from Apple Health, such as workouts, to suggest a water goal.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "BeWaterMyFriend writes the drinks you log to Apple Health: water, caffeine, alcohol and known nutrients.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

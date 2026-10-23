@@ -11,8 +11,15 @@ struct TodayView: View {
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
 
+    /// Highest goal-day count ever reached; belts are based on it so they're never lost.
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.dojoBelt) private var awardedBeltRaw = 0
+
     @State private var editor: EditorMode?
     @State private var loggedCount = 0
+    @State private var showDojo = false
+    @State private var earnedBelt: Belt?
+    @State private var splashTrigger = 0
 
     var body: some View {
         NavigationStack {
@@ -29,6 +36,9 @@ struct TodayView: View {
             .sheet(item: $editor) { mode in
                 DrinkEditorView(mode: mode)
             }
+            .fullScreenCover(item: $earnedBelt) { belt in
+                BeltEarnedView(belt: belt)
+            }
             .sensoryFeedback(.success, trigger: loggedCount)
         }
     }
@@ -41,14 +51,26 @@ struct TodayView: View {
         let todaysEntries = entries.filter { interval.contains($0.timestamp) && $0.timestamp < interval.end }
         let summary = Summaries.summary(forLogicalDay: today, entries: todaysEntries, boundary: boundary)
         let progress = summary.progress(goalML: goalML)
+        let stats = DojoProgress.stats(days: Summaries.daily(entries: entries, boundary: boundary),
+                                       goalML: goalML, today: today, calendar: boundary.calendar)
+        let goalDays = max(bestGoalDays, stats.goalDays)
+        let belt = Belt.belt(forGoalDays: goalDays)
 
         List {
             Section {
                 progressHeader(summary: summary, progress: progress)
+                    .overlay { SplashBurst(trigger: splashTrigger) }
                 if companionEnabled {
-                    CompanionView(progress: progress)
+                    CompanionView(progress: progress, belt: belt, stats: stats,
+                                  goalDaysTowardBelt: goalDays) { showDojo = true }
                 }
             }
+            .listRowBackground(
+                ZStack {
+                    Dojo.card
+                    SeigaihaPattern().opacity(0.05)
+                }
+            )
 
             Section {
                 QuickLogGrid(presets: sortedPresets) { preset in
@@ -75,11 +97,30 @@ struct TodayView: View {
                         .tint(.primary)
                     }
                     .onDelete { offsets in
-                        offsets.map { todaysEntries[$0] }.forEach(context.delete)
-                        try? context.save()
+                        EntryActions.delete(offsets.map { todaysEntries[$0] }, in: context)
                     }
                 }
             }
+        }
+        .dojoBackground()
+        .sheet(isPresented: $showDojo) {
+            DojoView(progress: progress, belt: belt, stats: stats, goalDays: goalDays)
+        }
+        .onChange(of: stats.goalDays, initial: true) { _, newValue in
+            updateRank(goalDays: newValue)
+        }
+        .onChange(of: progress >= 1) { wasReached, isReached in
+            if isReached && !wasReached { splashTrigger += 1 }
+        }
+    }
+
+    /// Remembers the best goal-day count and celebrates a newly earned belt.
+    private func updateRank(goalDays: Int) {
+        bestGoalDays = max(bestGoalDays, goalDays)
+        let belt = Belt.belt(forGoalDays: bestGoalDays)
+        if belt.rawValue > awardedBeltRaw {
+            awardedBeltRaw = belt.rawValue
+            if companionEnabled { earnedBelt = belt }
         }
     }
 
@@ -166,7 +207,7 @@ struct QuickLogGrid: View {
                         VStack(spacing: 6) {
                             Image(systemName: preset.category.symbolName)
                                 .font(.title3)
-                                .foregroundStyle(preset.category.countsTowardGoal ? Color.accentColor : .orange)
+                                .foregroundStyle(preset.category.isAlcoholic ? .orange : Color.accentColor)
                             Text(preset.name)
                                 .font(.caption.weight(.semibold))
                                 .lineLimit(2)
@@ -202,7 +243,7 @@ struct EntryRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: entry.category.symbolName)
-                .foregroundStyle(entry.category.countsTowardGoal ? Color.accentColor : .orange)
+                .foregroundStyle(entry.category.isAlcoholic ? .orange : Color.accentColor)
                 .frame(width: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.name)

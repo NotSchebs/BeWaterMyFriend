@@ -9,6 +9,8 @@ struct DrinkDraft {
     var category: DrinkCategory = .water
     var volumeML: Double = 250
     var alcoholPercent: Double?
+    /// `nil` = automatic.
+    var hydrationPercent: Double?
     var nutrientsPer100ml = Nutrients()
     var isFavourite = false
 
@@ -24,6 +26,7 @@ struct DrinkDraft {
         category = entry.category
         volumeML = entry.volumeML
         alcoholPercent = entry.alcoholPercent
+        hydrationPercent = entry.hydrationPercent
         nutrientsPer100ml = entry.nutrientsPer100ml
     }
 
@@ -32,8 +35,17 @@ struct DrinkDraft {
         category = preset.category
         volumeML = preset.volumeML
         alcoholPercent = preset.alcoholPercent
+        hydrationPercent = preset.hydrationPercent
         nutrientsPer100ml = preset.nutrientsPer100ml
         isFavourite = preset.isFavourite
+    }
+
+    var automaticHydrationPercent: Double {
+        DrinkMath.defaultHydrationPercent(category: category, alcoholPercent: effectiveAlcoholPercent)
+    }
+
+    var effectiveHydrationPercent: Double {
+        hydrationPercent ?? automaticHydrationPercent
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
@@ -49,7 +61,9 @@ struct DrinkDraft {
         entry.category = category
         entry.volumeML = volumeML
         entry.alcoholPercent = effectiveAlcoholPercent
+        entry.hydrationPercent = hydrationPercent
         entry.nutrientsPer100ml = nutrientsPer100ml
+        entry.modifiedAt = .now  // restarts the Apple Health write delay
     }
 
     func apply(to preset: DrinkPreset) {
@@ -57,6 +71,7 @@ struct DrinkDraft {
         preset.category = category
         preset.volumeML = volumeML
         preset.alcoholPercent = effectiveAlcoholPercent
+        preset.hydrationPercent = hydrationPercent
         preset.nutrientsPer100ml = nutrientsPer100ml
         preset.isFavourite = isFavourite
     }
@@ -68,6 +83,7 @@ struct DrinkDraft {
             category: category,
             volumeML: volumeML,
             alcoholPercent: effectiveAlcoholPercent,
+            hydrationPercent: hydrationPercent,
             nutrientsPer100ml: nutrientsPer100ml,
             source: .manual
         )
@@ -79,6 +95,7 @@ struct DrinkDraft {
             category: category,
             volumeML: volumeML,
             alcoholPercent: effectiveAlcoholPercent,
+            hydrationPercent: hydrationPercent,
             nutrientsPer100ml: nutrientsPer100ml,
             isFavourite: isFavourite,
             sortOrder: sortOrder

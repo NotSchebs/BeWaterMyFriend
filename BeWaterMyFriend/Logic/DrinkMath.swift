@@ -30,4 +30,17 @@ nonisolated enum DrinkMath {
     static func standardDrinks(alcoholGrams: Double) -> Double {
         alcoholGrams / gramsPerStandardDrink
     }
+
+    /// Default share of a drink that counts toward the water goal.
+    /// Transparent rule, not a medical claim: non-alcoholic drinks count fully;
+    /// alcoholic drinks count their non-alcohol part (5 % beer → 95 %,
+    /// 40 % spirits → 60 %). The user can override it per drink and preset.
+    static func defaultHydrationPercent(category: DrinkCategory, alcoholPercent: Double?) -> Double {
+        guard category.isAlcoholic, let alcoholPercent else { return 100 }
+        return min(max(100 - alcoholPercent, 0), 100)
+    }
+
+    static func hydrationML(volumeML: Double, percent: Double) -> Double {
+        volumeML * min(max(percent, 0), 100) / 100
+    }
 }

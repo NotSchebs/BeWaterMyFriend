@@ -31,6 +31,7 @@ struct HistoryView: View {
                     }
                 }
             }
+            .dojoBackground()
             .navigationTitle("History")
             .navigationDestination(for: Date.self) { day in
                 DayDetailView(day: day)
@@ -118,8 +119,7 @@ struct DayDetailView: View {
                     .tint(.primary)
                 }
                 .onDelete { offsets in
-                    offsets.map { dayEntries[$0] }.forEach(context.delete)
-                    try? context.save()
+                    EntryActions.delete(offsets.map { dayEntries[$0] }, in: context)
                 }
             }
 
@@ -137,6 +137,7 @@ struct DayDetailView: View {
                 }
             }
         }
+        .dojoBackground()
         .navigationTitle(day.formatted(.dateTime.weekday(.abbreviated).day().month()))
         .sheet(item: $editor) { mode in
             DrinkEditorView(mode: mode)

@@ -5,7 +5,7 @@ struct DaySummary: Identifiable, Equatable {
     /// Midnight of the calendar date naming the logical day.
     let day: Date
     var entryCount = 0
-    /// Fluid from drinks whose category counts toward the goal.
+    /// Fluid that counts toward the goal (each drink's hydration percentage applied).
     var goalFluidML = 0.0
     /// All fluid, including alcoholic drinks.
     var totalFluidML = 0.0
@@ -30,9 +30,7 @@ struct DaySummary: Identifiable, Equatable {
     mutating func add(_ entry: DrinkEntry) {
         entryCount += 1
         totalFluidML += entry.volumeML
-        if entry.category.countsTowardGoal {
-            goalFluidML += entry.volumeML
-        }
+        goalFluidML += entry.hydrationML
         alcoholGrams += entry.alcoholGrams
         let nutrients = entry.nutrientsPer100ml  // decode once, not per nutrient
         for nutrient in Nutrient.allCases {
