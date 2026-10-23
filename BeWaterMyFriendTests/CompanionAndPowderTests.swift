@@ -17,11 +17,17 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(CompanionLogic.mood(entries: [entry(.water, ml: 500, minutesAgo: 10)], now: now), .calm)
     }
 
-    func testHyperAfterEnoughRecentCaffeine() {
-        let espresso = entry(.coffee, ml: 30, minutesAgo: 20, caffeinePer100: 210)  // 63 mg
-        XCTAssertEqual(CompanionLogic.mood(entries: [espresso], now: now), .calm, "63 mg is below 80 mg")
-        let double = entry(.coffee, ml: 60, minutesAgo: 20, caffeinePer100: 210)  // 126 mg
-        XCTAssertEqual(CompanionLogic.mood(entries: [double], now: now), .hyper)
+    func testHyperWhenLastDrinkHadCaffeine() {
+        let espresso = entry(.coffee, ml: 30, minutesAgo: 20, caffeinePer100: 210)
+        XCTAssertEqual(CompanionLogic.mood(entries: [espresso], now: now), .hyper)
+    }
+
+    func testMoodFollowsTheLastDrink() {
+        let coffee = entry(.coffee, ml: 250, minutesAgo: 60, caffeinePer100: 40)
+        let water = entry(.water, ml: 250, minutesAgo: 10)
+        XCTAssertEqual(CompanionLogic.mood(entries: [coffee, water], now: now), .calm, "water after coffee calms it")
+        let shake = entry(.proteinShake, ml: 300, minutesAgo: 5)
+        XCTAssertEqual(CompanionLogic.mood(entries: [coffee, water, shake], now: now), .strong)
     }
 
     func testCaffeineWearsOffAfterThreeHours() {
@@ -29,10 +35,54 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(CompanionLogic.mood(entries: [old], now: now), .calm)
     }
 
-    func testTipsyBeatsHyper() {
-        let coffee = entry(.coffee, ml: 250, minutesAgo: 30, caffeinePer100: 40)
-        let beer = entry(.beer, ml: 330, minutesAgo: 30, abv: 5)  // 13 g alcohol
-        XCTAssertEqual(CompanionLogic.mood(entries: [coffee, beer], now: now), .tipsy)
+    func testTipsyWhenLastDrinkWasAlcoholic() {
+        let beer = entry(.beer, ml: 330, minutesAgo: 30, abv: 5)
+        XCTAssertEqual(CompanionLogic.mood(entries: [beer], now: now), .tipsy)
+        let coffeeAfter = entry(.coffee, ml: 250, minutesAgo: 10, caffeinePer100: 40)
+        XCTAssertEqual(CompanionLogic.mood(entries: [beer, coffeeAfter], now: now), .hyper)
+    }
+
+    func testTooMuchAlcoholMakesItDrunkWhateverCameLast() {
+        // 3 beers × 1.3 standard drinks within 3 hours, then a water.
+        let beers = (0..<3).map { entry(.beer, ml: 330, minutesAgo: 120 - Double($0) * 30, abv: 5) }
+        let water = entry(.water, ml: 250, minutesAgo: 5)
+        XCTAssertEqual(CompanionLogic.mood(entries: beers + [water], now: now), .drunk)
+        // Two beers (2.6 standard drinks) are not enough.
+        XCTAssertEqual(CompanionLogic.mood(entries: Array(beers.prefix(2)), now: now), .tipsy)
+        // Three beers more than 3 hours ago no longer count.
+        let old = (0..<3).map { entry(.beer, ml: 330, minutesAgo: 240 + Double($0) * 10, abv: 5) }
+        XCTAssertEqual(CompanionLogic.mood(entries: old, now: now), .calm)
+    }
+
+    func testJitterFiveSecondsTwiceAMinute() {
+        let minute = Date(timeIntervalSinceReferenceDate: 600)  // exactly on a minute
+        XCTAssertTrue(CompanionLogic.isJitterBurst(at: minute))
+        XCTAssertTrue(CompanionLogic.isJitterBurst(at: minute.addingTimeInterval(4.9)))
+        XCTAssertFalse(CompanionLogic.isJitterBurst(at: minute.addingTimeInterval(5)))
+        XCTAssertTrue(CompanionLogic.isJitterBurst(at: minute.addingTimeInterval(30)))
+        XCTAssertFalse(CompanionLogic.isJitterBurst(at: minute.addingTimeInterval(35)))
+        XCTAssertFalse(CompanionLogic.isJitterBurst(at: minute.addingTimeInterval(59)))
+    }
+
+    func testSameColoursAreGroupedEvenWhenNotNextToEachOther() {
+        let entries = [
+            entry(.water, ml: 500, minutesAgo: 300),
+            entry(.coffee, ml: 250, minutesAgo: 200),
+            entry(.sparklingWater, ml: 300, minutesAgo: 100),
+            entry(.coffee, ml: 250, minutesAgo: 50),
+        ]
+        let totals = CompanionLogic.tintTotals(entries: entries)
+        XCTAssertEqual(totals, [TintTotal(tint: .water, ml: 800), TintTotal(tint: .coffee, ml: 500)])
+        let layers = CompanionLogic.fillLayers(entries: entries, goalML: 2000)
+        XCTAssertEqual(layers.map(\.tint), [.water, .coffee])
+        XCTAssertEqual(layers[0].fraction, 0.4, accuracy: 0.0001)
+        XCTAssertEqual(layers[1].fraction, 0.25, accuracy: 0.0001)
+    }
+
+    func testLegendUsesGoalMillilitres() {
+        // A 330 ml beer counts 313.5 ml (95 %); the legend shows what counts.
+        let totals = CompanionLogic.tintTotals(entries: [entry(.beer, ml: 330, minutesAgo: 10, abv: 5)])
+        XCTAssertEqual(totals.first?.ml ?? 0, 313.5, accuracy: 0.0001)
     }
 
     func testStrongAndChargedFromPowders() {
@@ -46,20 +96,28 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(CompanionLogic.mood(entries: [later], now: now), .calm)
     }
 
-    func testFillLayersInOrderMergedAndCapped() {
+    func testFillLayersInOrderAndMerged() {
         let entries = [
             entry(.water, ml: 500, minutesAgo: 300),
-            entry(.sparklingWater, ml: 500, minutesAgo: 240),  // same colour as water → merged
+            entry(.sparklingWater, ml: 300, minutesAgo: 240),  // same colour as water → merged
             entry(.coffee, ml: 250, minutesAgo: 120),
-            entry(.beer, ml: 1000, minutesAgo: 60, abv: 5),  // 950 ml counted, but only 750 ml fit
-            entry(.water, ml: 500, minutesAgo: 30),  // nothing left to fill
         ]
         let layers = CompanionLogic.fillLayers(entries: entries.shuffled(), goalML: 2000)
-        XCTAssertEqual(layers.map(\.tint), [.water, .coffee, .beer])
-        XCTAssertEqual(layers[0].fraction, 0.5, accuracy: 0.0001)
+        XCTAssertEqual(layers.map(\.tint), [.water, .coffee])
+        XCTAssertEqual(layers[0].fraction, 0.4, accuracy: 0.0001)
         XCTAssertEqual(layers[1].fraction, 0.125, accuracy: 0.0001)
-        XCTAssertEqual(layers[2].fraction, 0.375, accuracy: 0.0001)
+    }
+
+    func testPastTheGoalEveryDrinkStaysVisible() {
+        let entries = [
+            entry(.water, ml: 1500, minutesAgo: 300),
+            entry(.coffee, ml: 500, minutesAgo: 120),
+            entry(.beer, ml: 1000, minutesAgo: 60, abv: 5),  // 950 ml counted, after the goal was reached
+        ]
+        let layers = CompanionLogic.fillLayers(entries: entries, goalML: 2000)
+        XCTAssertEqual(layers.map(\.tint), [.water, .coffee, .beer])
         XCTAssertEqual(layers.reduce(0) { $0 + $1.fraction }, 1, accuracy: 0.0001)
+        XCTAssertEqual(layers[2].fraction, 950.0 / 2950, accuracy: 0.0001)  // proportional share
     }
 }
 

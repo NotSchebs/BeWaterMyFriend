@@ -72,14 +72,18 @@ struct TodayView: View {
                                                  prestigeBase: prestigeBase)
         let belt = Belt.belt(forGoalDays: goalDays)
         let layers = CompanionLogic.fillLayers(entries: todaysEntries, goalML: goalML)
+        let legend = CompanionLogic.tintTotals(entries: todaysEntries)
         // The timeline's date is the start of the minute; a drink logged a few
         // seconds later must already count, so use the exact time here.
         let mood = CompanionLogic.mood(entries: entries, now: max(now, .now))
 
+        ScrollViewReader { scroller in
         List {
             Section {
-                progressHeader(summary: summary, progress: progress)
-                    .overlay { SplashBurst(trigger: splashTrigger) }
+                progressHeader(summary: summary, progress: progress, layers: layers, legend: legend) {
+                    withAnimation { scroller.scrollTo(Self.drinksAnchor, anchor: .top) }
+                }
+                .overlay { SplashBurst(trigger: splashTrigger) }
                 if companionEnabled {
                     CompanionView(progress: progress, layers: layers, mood: mood, belt: belt,
                                   prestige: prestigeLevel, stats: stats,
@@ -108,6 +112,7 @@ struct TodayView: View {
                 if todaysEntries.isEmpty {
                     Text("Nothing logged yet.")
                         .foregroundStyle(.secondary)
+                        .id(Self.drinksAnchor)
                 } else {
                     ForEach(todaysEntries) { entry in
                         Button {
@@ -116,12 +121,14 @@ struct TodayView: View {
                             EntryRow(entry: entry)
                         }
                         .tint(.primary)
+                        .id(entry.id == todaysEntries.first?.id ? AnyHashable(Self.drinksAnchor) : AnyHashable(entry.id))
                     }
                     .onDelete { offsets in
                         EntryActions.delete(offsets.map { todaysEntries[$0] }, in: context)
                     }
                 }
             }
+        }
         }
         .dojoBackground()
         .sheet(isPresented: $showDojo) {
@@ -158,24 +165,38 @@ struct TodayView: View {
         awardedBeltRaw = Belt.white.rawValue
     }
 
-    private func progressHeader(summary: DaySummary, progress: Double) -> some View {
+    /// Scroll target for tapping the ring.
+    private static let drinksAnchor = "todaysDrinks"
+
+    private func progressHeader(summary: DaySummary, progress: Double, layers: [FillLayer],
+                                legend: [TintTotal], onRingTap: @escaping () -> Void) -> some View {
         VStack(spacing: 16) {
-            ZStack {
-                ProgressRing(progress: progress)
-                    .frame(width: 170, height: 170)
-                VStack(spacing: 2) {
-                    Text(Format.ml(summary.goalFluidML))
-                        .font(.title2.bold())
-                        .contentTransition(.numericText())
-                    Text("of \(Format.ml(goalML))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text(Format.percent(progress))
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.accentColor)
+            // Tapping the ring jumps to today's drinks.
+            Button(action: onRingTap) {
+                ZStack {
+                    ProgressRing(progress: progress, layers: layers)
+                        .frame(width: 170, height: 170)
+                    VStack(spacing: 2) {
+                        Text(Format.ml(summary.goalFluidML))
+                            .font(.title2.bold())
+                            .contentTransition(.numericText())
+                        Text("of \(Format.ml(goalML))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(Format.percent(progress))
+                            .font(.caption.bold())
+                            .foregroundStyle(Color.accentColor)
+                    }
                 }
+                .contentShape(Circle())
             }
+            .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
+            .accessibilityHint("Shows today's drinks")
+
+            if !legend.isEmpty {
+                ColorLegend(totals: legend)
+            }
 
             HStack {
                 StatTile(title: "Caffeine", value: Format.mg(summary.caffeineMg), symbol: "bolt.fill")
@@ -197,6 +218,34 @@ struct TodayView: View {
         context.insert(preset.makeEntry())
         try? context.save()
         loggedCount += 1
+    }
+}
+
+/// What each colour in the ring and the drop means, with today's amount.
+struct ColorLegend: View {
+    var totals: [TintTotal]
+
+    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 8, alignment: .leading)]
+
+    var body: some View {
+        LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+            ForEach(totals, id: \.tint) { total in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(total.tint.ringColor)
+                        .frame(width: 10, height: 10)
+                    Text(total.tint.displayName)
+                        .font(.caption)
+                        .lineLimit(1)
+                    Text(Format.ml(total.ml))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(.horizontal, 4)
     }
 }
 

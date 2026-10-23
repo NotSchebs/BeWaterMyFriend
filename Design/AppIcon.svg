@@ -5,23 +5,14 @@
       <stop offset="0.6" stop-color="#1D4590"/>
       <stop offset="1" stop-color="#0F2A5C"/>
     </radialGradient>
-    <linearGradient id="water" x1="0.2" y1="0" x2="0.8" y2="1">
-      <stop offset="0" stop-color="#A9D4FA"/>
-      <stop offset="0.55" stop-color="#5BA6F2"/>
-      <stop offset="1" stop-color="#3A86E0"/>
-    </linearGradient>
-    <linearGradient id="mask" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2B2B30"/>
-      <stop offset="1" stop-color="#121214"/>
-    </linearGradient>
-    <linearGradient id="tail" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#A5221C"/>
-      <stop offset="1" stop-color="#D8402F"/>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6FB3F5"/>
+      <stop offset="1" stop-color="#3D88E2"/>
     </linearGradient>
     <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
       <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#06152F" flood-opacity="0.45"/>
     </filter>
-    <clipPath id="dropClip"><path d="M512 168 C 546 312, 748 452, 748 628 A 236 236 0 0 1 276 628 C 276 452, 478 312, 512 168 Z"/></clipPath>
+    <clipPath id="dropClip"><path d="M512.0 150.0 C 553.6 286.5, 772.0 423.0, 772.0 572.5 A 260.0 260.0 0 0 1 252.0 572.5 C 252.0 423.0, 470.4 286.5, 512.0 150.0 Z"/></clipPath>
   </defs>
 
   <rect width="1024" height="1024" fill="url(#bg)"/>
@@ -468,30 +459,24 @@
 <circle cx="960.0" cy="1140.0" r="30.0" fill="none" stroke="#FFFFFF" stroke-width="7.2"/>
 </g>
 
-  <!-- headband tails, flowing behind the drop -->
-  <path d="M742 612 C 812 590, 860 560, 908 512 C 900 560, 870 604, 820 640 C 800 650, 770 650, 742 644 Z" fill="url(#tail)"/>
-  <path d="M742 640 C 806 656, 852 680, 892 724 C 846 718, 800 700, 760 676 Z" fill="#B92C22"/>
+  <!-- headband tails (red, like the highest Dan belt) behind the drop -->
+  <rect x="740.8" y="547.6" width="187.2" height="51.2" rx="25.6" fill="#C9302A" transform="rotate(18 740.8 573.1)"/>
+  <rect x="740.8" y="547.6" width="187.2" height="51.2" rx="25.6" fill="#A8241F" transform="rotate(40 740.8 573.1)"/>
 
-  <g filter="url(#shadow)">
-    <path d="M512 168 C 546 312, 748 452, 748 628 A 236 236 0 0 1 276 628 C 276 452, 478 312, 512 168 Z" fill="url(#water)"/>
-  </g>
-  <!-- inner shading and highlight -->
+  <!-- drop: white body, water fill with wave, ink outline -->
+  <g filter="url(#shadow)"><path d="M512.0 150.0 C 553.6 286.5, 772.0 423.0, 772.0 572.5 A 260.0 260.0 0 0 1 252.0 572.5 C 252.0 423.0, 470.4 286.5, 512.0 150.0 Z" fill="#FFFFFF"/></g>
   <g clip-path="url(#dropClip)">
-    <ellipse cx="600" cy="760" rx="260" ry="170" fill="#2F74CF" opacity="0.35"/>
-    <path d="M438 330 C 400 400, 366 476, 356 560" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="28" stroke-linecap="round"/>
-    <circle cx="372" cy="612" r="14" fill="#FFFFFF" opacity="0.55"/>
+    <path d="M 252.0 832.5 L 252.0 286.5 L 252.0 302.4 L 273.7 303.5 L 295.3 303.4 L 317.0 302.1 L 338.7 299.8 L 360.3 296.6 L 382.0 292.7 L 403.7 288.4 L 425.3 283.9 L 447.0 279.6 L 468.7 275.8 L 490.3 272.7 L 512.0 270.6 L 533.7 269.5 L 555.3 269.6 L 577.0 270.9 L 598.7 273.2 L 620.3 276.4 L 642.0 280.3 L 663.7 284.6 L 685.3 289.1 L 707.0 293.4 L 728.7 297.2 L 750.3 300.3 L 772.0 302.4 L 772.0 832.5 Z" fill="url(#water)"/>
   </g>
-  <path d="M512 168 C 546 312, 748 452, 748 628 A 236 236 0 0 1 276 628 C 276 452, 478 312, 512 168 Z" fill="none" stroke="#0A1C40" stroke-width="22" stroke-linejoin="round"/>
+  <path d="M512.0 150.0 C 553.6 286.5, 772.0 423.0, 772.0 572.5 A 260.0 260.0 0 0 1 252.0 572.5 C 252.0 423.0, 470.4 286.5, 512.0 150.0 Z" fill="none" stroke="#0A1C40" stroke-width="23.4" stroke-linejoin="round"/>
 
-  <!-- ninja mask with knot and eyes -->
-  <rect x="246" y="590" width="532" height="112" rx="56" fill="url(#mask)"/>
-  <rect x="262" y="598" width="500" height="18" rx="9" fill="#FFFFFF" opacity="0.08"/>
-  <circle cx="752" cy="640" r="30" fill="#141416"/>
-  <path d="M364 646 L 456 660 Q 462 672 452 678 L 372 666 Q 356 660 364 646 Z" fill="#FFFFFF"/>
-  <path d="M660 646 L 568 660 Q 562 672 572 678 L 652 666 Q 668 660 660 646 Z" fill="#FFFFFF"/>
+  <!-- mask band and focused eyes -->
+  <rect x="272.8" y="515.1" width="478.4" height="116.0" rx="58.0" fill="#1F1F1F"/>
+  <rect x="376.8" y="547.6" width="93.6" height="51.2" rx="25.6" fill="#FFFFFF" transform="rotate(10 423.6 573.1)"/>
+  <rect x="553.6" y="547.6" width="93.6" height="51.2" rx="25.6" fill="#FFFFFF" transform="rotate(-10 600.4 573.1)"/>
 
   <!-- red seal with 水 (water) -->
-  <g transform="translate(812 822) rotate(-6)">
+  <g transform="translate(812 838)">
     <rect x="-74" y="-74" width="148" height="148" rx="22" fill="#C2332B"/>
     <rect x="-62" y="-62" width="124" height="124" rx="14" fill="none" stroke="#F5EFE3" stroke-width="6" opacity="0.9"/>
     <text x="0" y="34" font-family="Hiragino Mincho ProN, Songti SC, serif" font-size="100" font-weight="600" fill="#F5EFE3" text-anchor="middle">水</text>

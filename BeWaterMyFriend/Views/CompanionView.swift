@@ -56,6 +56,7 @@ struct CompanionView: View {
 
     private var message: String {
         switch mood {
+        case .drunk: return "Whoa… the room is spinning. Water break?"
         case .tipsy: return "Feeling a bit wobbly… hic!"
         case .hyper: return "Caffeine rush! Zoom zoom!"
         case .strong: return "Protein power! Feeling strong."
@@ -86,11 +87,12 @@ struct NinjaDrop: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
             let phase = reduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate * 2
+            let jitter = mood == .hyper && !reduceMotion && CompanionLogic.isJitterBurst(at: timeline.date)
             GeometryReader { geo in
                 let w = geo.size.width
                 let h = geo.size.height
                 ZStack {
-                    if mood == .hyper { speedLines(w: w, h: h, phase: phase) }
+                    if jitter { speedLines(w: w, h: h, phase: phase) }
                     if mood == .strong { arms(w: w, h: h, phase: phase) }
                     tails(w: w, h: h, phase: phase)
 
@@ -99,11 +101,12 @@ struct NinjaDrop: View {
                         .clipShape(DropShape())
                     DropShape().stroke(Dojo.ink, lineWidth: max(w * 0.045, 1.5))
 
-                    if mood == .tipsy {
+                    if mood == .tipsy || mood == .drunk {
                         // Rosy cheeks under the mask.
+                        let blush = Color.pink.opacity(mood == .drunk ? 0.85 : 0.55)
                         HStack(spacing: w * 0.34) {
-                            Ellipse().fill(Color.pink.opacity(0.55))
-                            Ellipse().fill(Color.pink.opacity(0.55))
+                            Ellipse().fill(blush)
+                            Ellipse().fill(blush)
                         }
                         .frame(width: w * 0.7, height: h * 0.06)
                         .offset(y: h * 0.27)
@@ -125,8 +128,8 @@ struct NinjaDrop: View {
                     if prestige > 0 { prestigeSeal(w: w, h: h) }
                 }
                 .frame(width: w, height: h)
-                .rotationEffect(.degrees(mood == .tipsy ? sin(phase * 0.6) * 9 : 0), anchor: .bottom)
-                .offset(x: mood == .hyper ? sin(phase * 22) * w * 0.025 : 0)
+                .rotationEffect(.degrees(sway(phase: phase)), anchor: .bottom)
+                .offset(x: jitter ? sin(phase * 22) * w * 0.025 : (mood == .drunk ? sin(phase * 0.8) * w * 0.05 : 0))
             }
         }
         .scaleEffect(DojoProgress.companionScale(progress: progress), anchor: .bottom)
@@ -134,10 +137,19 @@ struct NinjaDrop: View {
         .accessibilityHidden(true)
     }
 
+    private func sway(phase: Double) -> Double {
+        switch mood {
+        case .tipsy: sin(phase * 0.6) * 9
+        case .drunk: sin(phase * 1.1) * 16
+        default: 0
+        }
+    }
+
     private var eyeStyle: Eye.Style {
         switch mood {
         case .hyper: .wide
         case .tipsy: .sleepy
+        case .drunk: .dizzy
         default: progress >= 1 ? .happy : .focused
         }
     }
@@ -159,6 +171,11 @@ struct NinjaDrop: View {
         ForEach(0..<2) { i in
             Capsule()
                 .fill(i == 0 ? belt.color : belt.secondaryColor)
+                .overlay(alignment: .trailing) {
+                    if let metal = belt.metalColor {
+                        Capsule().fill(metal).frame(width: w * 0.1)
+                    }
+                }
                 .overlay(Capsule().stroke(Color.black.opacity(belt == .white ? 0.35 : 0), lineWidth: 1))
                 .frame(width: w * 0.36, height: h * 0.075)
                 .rotationEffect(.degrees(Double(i == 0 ? 18 : 40) + sin(phase * 1.5 + Double(i)) * 6), anchor: .leading)
@@ -210,7 +227,7 @@ struct NinjaDrop: View {
 }
 
 private struct Eye: View {
-    enum Style { case focused, happy, wide, sleepy }
+    enum Style { case focused, happy, wide, sleepy, dizzy }
     var style: Style
     var mirrored = false
 
@@ -223,6 +240,13 @@ private struct Eye: View {
             Circle().fill(Color.white).scaleEffect(1.5)
         case .sleepy:
             Capsule().fill(Color.white).scaleEffect(x: 1, y: 0.35).offset(y: 2)
+        case .dizzy:
+            // × eyes
+            ZStack {
+                Capsule().fill(Color.white).frame(height: 2.5).rotationEffect(.degrees(40))
+                Capsule().fill(Color.white).frame(height: 2.5).rotationEffect(.degrees(-40))
+            }
+            .scaleEffect(0.8)
         case .focused:
             Capsule()
                 .fill(Color.white)
@@ -312,7 +336,8 @@ extension DrinkTint {
 }
 
 /// A small belt: plain colour, black with gold stripes for 1st–5th Dan,
-/// red-and-white for 6th–8th Dan, red for 9th–10th Dan.
+/// red-and-white for 6th–8th Dan, red for 9th–10th Dan. Ranks that share a
+/// belt colour get a bronze, silver or gold edge so they look different.
 struct BeltBadge: View {
     var belt: Belt
 
@@ -339,6 +364,11 @@ struct BeltBadge: View {
         }
         .clipShape(.rect(cornerRadius: 2))
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.black.opacity(belt == .white ? 0.35 : 0), lineWidth: 1))
+        .overlay {
+            if let metal = belt.metalColor {
+                RoundedRectangle(cornerRadius: 2.5).stroke(metal, lineWidth: 1.6).padding(-1.2)
+            }
+        }
         .frame(width: 22, height: 6)
         .accessibilityHidden(true)
     }
@@ -356,6 +386,17 @@ extension Belt {
         case .brown: Color(red: 0.55, green: 0.35, blue: 0.17)
         case .black, .dan1, .dan2, .dan3, .dan4, .dan5: Color(white: 0.11)
         case .dan6, .dan7, .dan8, .dan9, .dan10: Color(red: 0.8, green: 0.15, blue: 0.14)
+        }
+    }
+
+    /// Edge for ranks that share a belt colour: 6th/7th/8th Dan bronze/silver/gold,
+    /// 9th/10th Dan silver/gold.
+    var metalColor: Color? {
+        switch self {
+        case .dan6: Color(red: 0.72, green: 0.45, blue: 0.2)
+        case .dan7, .dan9: Color(red: 0.78, green: 0.8, blue: 0.84)
+        case .dan8, .dan10: Color(red: 0.95, green: 0.78, blue: 0.25)
+        default: nil
         }
     }
 
@@ -404,6 +445,7 @@ struct SplashBurst: View {
             NinjaDrop(progress: 0.65, belt: .white, layers: layers, mood: .calm).frame(width: 64, height: 84)
             NinjaDrop(progress: 0.65, belt: .green, layers: layers, mood: .hyper).frame(width: 64, height: 84)
             NinjaDrop(progress: 0.65, belt: .black, layers: layers, mood: .tipsy).frame(width: 64, height: 84)
+            NinjaDrop(progress: 0.65, belt: .dan8, layers: layers, mood: .drunk).frame(width: 64, height: 84)
         }
         HStack(spacing: 34) {
             NinjaDrop(progress: 1, belt: .dan3, mood: .strong).frame(width: 64, height: 84)
