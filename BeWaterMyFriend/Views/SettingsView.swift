@@ -84,6 +84,19 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(health.isSyncing)
+                    Button("Resend all drinks") {
+                        Task {
+                            await health.resendAll(context: context,
+                                                   delay: HealthWriteDelay(rawValue: delayRaw) ?? .oneHour,
+                                                   boundary: DayBoundary(dayEndMinutes: dayEndMinutes))
+                        }
+                    }
+                    .disabled(health.isSyncing)
+                    if let result = health.lastResult {
+                        Text(result)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
                     if let error = health.lastError {
                         Text(error)
                             .font(.footnote)

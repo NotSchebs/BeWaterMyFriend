@@ -7,6 +7,8 @@ enum EditorMode: Identifiable {
     case editEntry(DrinkEntry)
     case newPreset
     case editPreset(DrinkPreset)
+    /// A new entry pre-filled from a barcode scan, shown for review.
+    case scanned(DrinkDraft)
 
     var id: String {
         switch self {
@@ -14,6 +16,7 @@ enum EditorMode: Identifiable {
         case .editEntry(let entry): "entry-\(entry.persistentModelID.hashValue)"
         case .newPreset: "newPreset"
         case .editPreset(let preset): "preset-\(preset.persistentModelID.hashValue)"
+        case .scanned(let draft): "scan-\(draft.barcode ?? "")"
         }
     }
 
@@ -26,7 +29,7 @@ enum EditorMode: Identifiable {
 
     var isNew: Bool {
         switch self {
-        case .newEntry, .newPreset: true
+        case .newEntry, .newPreset, .scanned: true
         default: false
         }
     }
@@ -48,12 +51,21 @@ struct DrinkEditorView: View {
         case .newEntry, .newPreset: _draft = State(initialValue: DrinkDraft())
         case .editEntry(let entry): _draft = State(initialValue: DrinkDraft(entry: entry))
         case .editPreset(let preset): _draft = State(initialValue: DrinkDraft(preset: preset))
+        case .scanned(let scanned): _draft = State(initialValue: scanned)
         }
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                if let note = draft.scanNote {
+                    Section {
+                        Label(note, systemImage: "barcode.viewfinder")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section {
                     TextField("Name, e.g. Rivella Rot", text: $draft.name)
                     Picker("Type", selection: $draft.category) {
@@ -61,7 +73,20 @@ struct DrinkEditorView: View {
                             Label(category.displayName, systemImage: category.symbolName).tag(category)
                         }
                     }
-                    LabeledContent("Amount") {
+                    if draft.category.isPowderMix {
+                        LabeledContent("Powder") {
+                            HStack {
+                                TextField("g", value: Binding(
+                                    get: { draft.effectivePowderGrams },
+                                    set: { draft.powderGrams = $0 }
+                                ), format: .number)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                Text("g").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    LabeledContent(draft.category.isPowderMix ? "Mixed with" : "Amount") {
                         HStack {
                             TextField("ml", value: $draft.volumeML, format: .number)
                                 .keyboardType(.decimalPad)
@@ -73,6 +98,9 @@ struct DrinkEditorView: View {
                         Toggle("Favourite", isOn: $draft.isFavourite)
                     } else {
                         DatePicker("Time", selection: $draft.timestamp, in: ...Date.now)
+                    }
+                    if case .scanned = mode {
+                        Toggle("Remember as preset", isOn: $draft.saveAsPreset)
                     }
                 }
 
@@ -107,6 +135,13 @@ struct DrinkEditorView: View {
                 }
             }
             .dojoBackground()
+            .onChange(of: draft.category) { old, new in
+                // Switching to a powder drink: start from a typical scoop and glass.
+                if new.isPowderMix && !old.isPowderMix {
+                    draft.powderGrams = draft.powderGrams ?? new.typicalPowderGrams
+                    draft.volumeML = new.typicalLiquidML
+                }
+            }
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -154,12 +189,15 @@ struct DrinkEditorView: View {
                     ForEach(Nutrient.allCases.filter { $0.group == group }) { nutrient in
                         NutrientField(nutrient: nutrient,
                                       value: $draft.nutrientsPer100ml[nutrient],
-                                      volumeML: draft.volumeML)
+                                      base: draft.nutrientBase,
+                                      baseUnit: draft.category.isPowderMix ? "g" : "ml")
                     }
                 }
             } footer: {
                 if group == Nutrient.Group.allCases.last {
-                    Text("Values per 100 ml. Leave empty if unknown. All values are estimates.")
+                    Text(draft.category.isPowderMix
+                         ? "Values per 100 g of powder, as on the package. Leave empty if unknown. All values are estimates."
+                         : "Values per 100 ml. Leave empty if unknown. All values are estimates.")
                 }
             }
         }
@@ -168,6 +206,7 @@ struct DrinkEditorView: View {
     private var title: String {
         switch mode {
         case .newEntry: "New drink"
+        case .scanned: "Scanned drink"
         case .editEntry: "Edit drink"
         case .newPreset: "New preset"
         case .editPreset: "Edit preset"
@@ -185,9 +224,28 @@ struct DrinkEditorView: View {
             context.insert(draft.makePreset(sortOrder: count))
         case .editPreset(let preset):
             draft.apply(to: preset)
+        case .scanned:
+            context.insert(draft.makeEntry())
+            if draft.saveAsPreset { rememberScannedPreset() }
         }
         try? context.save()
         dismiss()
+    }
+
+    /// Updates the preset with this barcode, or creates one, so the user's
+    /// corrections are used the next time this product is scanned.
+    private func rememberScannedPreset() {
+        guard let barcode = draft.barcode else { return }
+        let code: String? = barcode
+        let existing = try? context.fetch(FetchDescriptor<DrinkPreset>(predicate: #Predicate { $0.barcode == code })).first
+        if let existing {
+            var updated = draft
+            updated.isFavourite = existing.isFavourite
+            updated.apply(to: existing)
+        } else {
+            let count = (try? context.fetchCount(FetchDescriptor<DrinkPreset>())) ?? 0
+            context.insert(draft.makePreset(sortOrder: count))
+        }
     }
 
     private func delete() {
@@ -206,14 +264,16 @@ struct DrinkEditorView: View {
 struct NutrientField: View {
     let nutrient: Nutrient
     @Binding var value: Double?
-    let volumeML: Double
+    /// ml of drink, or g of powder for powder drinks.
+    let base: Double
+    let baseUnit: String
 
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(nutrient.displayName)
-                if let total = DrinkMath.scale(value, toVolumeML: volumeML) {
-                    Text("\(Format.amount(total, unit: nutrient.unit)) in \(Format.ml(volumeML))")
+                if let total = DrinkMath.scale(value, toVolumeML: base) {
+                    Text("\(Format.amount(total, unit: nutrient.unit)) in \(Format.amount(base, unit: baseUnit))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

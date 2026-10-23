@@ -13,6 +13,10 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
     case energyDrink
     case milk
     case sportsDrink
+    /// Powder mixed into water (a scoop of electrolytes).
+    case electrolytes
+    /// Powder mixed into water or milk.
+    case proteinShake
     case beer
     case wine
     case spirits
@@ -32,6 +36,8 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
         case .energyDrink: "Energy drink"
         case .milk: "Milk"
         case .sportsDrink: "Sports drink"
+        case .electrolytes: "Electrolytes"
+        case .proteinShake: "Protein shake"
         case .beer: "Beer"
         case .wine: "Wine"
         case .spirits: "Spirits"
@@ -48,12 +54,23 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
         case .juice: "carrot.fill"
         case .softDrink, .energyDrink, .sportsDrink: "takeoutbag.and.cup.and.straw.fill"
         case .milk: "waterbottle.fill"
+        case .electrolytes: "bolt.fill"
+        case .proteinShake: "dumbbell.fill"
         case .beer: "mug.fill"
         case .wine, .cocktail: "wineglass.fill"
         case .spirits: "flame.fill"
         case .other: "circle.dotted"
         }
     }
+
+    /// Made from a scoop of powder: nutrients are per 100 g of powder.
+    var isPowderMix: Bool {
+        self == .electrolytes || self == .proteinShake
+    }
+
+    /// Typical scoop and liquid, used as defaults.
+    var typicalPowderGrams: Double { self == .proteinShake ? 30 : 8 }
+    var typicalLiquidML: Double { self == .proteinShake ? 300 : 500 }
 
     var isAlcoholic: Bool {
         switch self {

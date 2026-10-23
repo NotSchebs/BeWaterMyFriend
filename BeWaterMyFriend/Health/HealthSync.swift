@@ -29,6 +29,10 @@ final class HealthSync {
     private(set) var isSyncing = false
     private(set) var lastError: String?
     private(set) var lastSync: Date?
+    /// Plain-language result of the last sync, shown in Settings.
+    private(set) var lastResult: String?
+    /// A "write now" request that arrived while a sync was running.
+    private var forceRequested = false
 
     var isAvailable: Bool { HKHealthStore.isHealthDataAvailable() }
 
@@ -38,40 +42,91 @@ final class HealthSync {
         try await store.requestAuthorization(toShare: Set(HealthQuantity.all.map(Self.sampleType)), read: [])
     }
 
+    /// True once the user has answered the permission screen.
+    /// https://developer.apple.com/documentation/healthkit/hkhealthstore/statusforauthorizationrequest(toshare:read:)
+    func hasAnsweredPermission() async -> Bool {
+        guard isAvailable else { return false }
+        let status = try? await store.statusForAuthorizationRequest(
+            toShare: Set(HealthQuantity.all.map(Self.sampleType)), read: [])
+        return status == .unnecessary
+    }
+
     /// Deletes Health samples of deleted entries, then writes entries whose
     /// delay has passed. `ignoreDelay` writes everything pending right away.
     func sync(context: ModelContext, delay: HealthWriteDelay, boundary: DayBoundary,
               ignoreDelay: Bool = false, now: Date = .now) async {
-        guard isAvailable, !isSyncing else { return }
+        guard isAvailable else { return }
+        if isSyncing {
+            // Don't drop a "write now" tap: run it right after the current sync.
+            if ignoreDelay { forceRequested = true }
+            return
+        }
+        // Never sync while the permission screen is open or unanswered: every
+        // type would look "not allowed" and nothing would be written.
+        guard await hasAnsweredPermission() else {
+            if ignoreDelay { lastResult = "Allow access to Apple Health first." }
+            return
+        }
         isSyncing = true
         defer { isSyncing = false }
 
+        var force = ignoreDelay
+        var written = 0
         do {
-            for id in PendingHealthDeletes.all() {
-                try await deleteSamples(syncID: id)
-                PendingHealthDeletes.remove(id)
-            }
+            repeat {
+                forceRequested = false
+                for id in PendingHealthDeletes.all() {
+                    try await deleteSamples(syncID: id)
+                    PendingHealthDeletes.remove(id)
+                }
 
-            let entries = try context.fetch(FetchDescriptor<DrinkEntry>())
-            let due = entries.filter {
-                $0.needsHealthWrite && (ignoreDelay || HealthPlan.isDue($0, delay: delay, boundary: boundary, now: now))
-            }
-            for entry in due {
-                try await write(entry)
-            }
-            if !due.isEmpty { try context.save() }
+                let entries = try context.fetch(FetchDescriptor<DrinkEntry>())
+                let due = entries.filter {
+                    $0.needsHealthWrite && (force || HealthPlan.isDue($0, delay: delay, boundary: boundary, now: now))
+                }
+                for entry in due {
+                    if try await write(entry) { written += 1 }
+                }
+                if !due.isEmpty { try context.save() }
+                force = true  // a queued request is always a "write now"
+            } while forceRequested
+
             lastError = nil
             lastSync = now
+            if ignoreDelay || written > 0 {
+                let pending = try context.fetch(FetchDescriptor<DrinkEntry>()).filter(\.needsHealthWrite).count
+                lastResult = written > 0
+                    ? "Wrote \(written) \(written == 1 ? "drink" : "drinks") to Apple Health."
+                    : (pending == 0 ? "Nothing waiting. Apple Health is up to date." : "Some drinks couldn't be written. Check Health access in Settings.")
+            }
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    private func write(_ entry: DrinkEntry) async throws {
+    /// Marks every drink as not written, then writes them all again. Safe to use:
+    /// each drink's old samples are deleted (by sync ID) before it is rewritten.
+    func resendAll(context: ModelContext, delay: HealthWriteDelay, boundary: DayBoundary) async {
+        guard !isSyncing, let entries = try? context.fetch(FetchDescriptor<DrinkEntry>()) else { return }
+        for entry in entries where entry.healthWrittenAt != nil {
+            entry.healthWrittenAt = .distantPast  // keeps its sync ID, so old samples get deleted first
+        }
+        try? context.save()
+        await sync(context: context, delay: delay, boundary: boundary, ignoreDelay: true)
+    }
+
+    /// Returns false (entry stays pending) if Health access for one of its
+    /// types hasn't been decided yet.
+    private func write(_ entry: DrinkEntry) async throws -> Bool {
+        let planned = HealthPlan.samples(for: entry)
+        if planned.contains(where: { store.authorizationStatus(for: Self.sampleType($0.quantity)) == .notDetermined }) {
+            return false
+        }
+
         // Snapshot the version first: an edit during the async calls below stays pending.
         let version = entry.modifiedAt ?? entry.timestamp
         let id = entry.healthSyncID ?? UUID()
-        if entry.healthWrittenAt != nil {
+        if entry.healthWrittenAt != nil, entry.healthSyncID != nil {
             try await deleteSamples(syncID: id)
         }
 
@@ -79,9 +134,9 @@ final class HealthSync {
             HKMetadataKeyFoodType: entry.name,
             Self.entryIDKey: id.uuidString,
         ]
-        let samples: [HKQuantitySample] = HealthPlan.samples(for: entry).compactMap { planned in
+        let samples: [HKQuantitySample] = planned.compactMap { planned in
             let type = Self.sampleType(planned.quantity)
-            // Skip types the user didn't allow; saving them would fail the whole batch.
+            // Skip types the user turned off; saving them would fail the whole batch.
             guard store.authorizationStatus(for: type) == .sharingAuthorized else { return nil }
             return HKQuantitySample(
                 type: type,
@@ -96,6 +151,7 @@ final class HealthSync {
         }
         entry.healthSyncID = id
         entry.healthWrittenAt = version
+        return true
     }
 
     /// Deletes every sample this app wrote for one entry.

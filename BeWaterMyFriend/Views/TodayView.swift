@@ -14,8 +14,11 @@ struct TodayView: View {
     /// Highest goal-day count ever reached; belts are based on it so they're never lost.
     @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
     @AppStorage(SettingsKey.dojoBelt) private var awardedBeltRaw = 0
+    @AppStorage(SettingsKey.prestigeLevel) private var prestigeLevel = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
 
     @State private var editor: EditorMode?
+    @State private var showScanner = false
     @State private var loggedCount = 0
     @State private var showDojo = false
     @State private var earnedBelt: Belt?
@@ -32,9 +35,21 @@ struct TodayView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Add drink", systemImage: "plus") { editor = .newEntry }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Scan", systemImage: "barcode.viewfinder") { showScanner = true }
+                }
             }
             .sheet(item: $editor) { mode in
                 DrinkEditorView(mode: mode)
+            }
+            .sheet(isPresented: $showScanner) {
+                ScanView { draft in
+                    // Open the review once the scanner sheet has gone.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(400))
+                        editor = .scanned(draft)
+                    }
+                }
             }
             .fullScreenCover(item: $earnedBelt) { belt in
                 BeltEarnedView(belt: belt)
@@ -53,15 +68,21 @@ struct TodayView: View {
         let progress = summary.progress(goalML: goalML)
         let stats = DojoProgress.stats(days: Summaries.daily(entries: entries, boundary: boundary),
                                        goalML: goalML, today: today, calendar: boundary.calendar)
-        let goalDays = max(bestGoalDays, stats.goalDays)
+        let goalDays = DojoProgress.rankGoalDays(bestTotal: bestGoalDays, currentTotal: stats.goalDays,
+                                                 prestigeBase: prestigeBase)
         let belt = Belt.belt(forGoalDays: goalDays)
+        let layers = CompanionLogic.fillLayers(entries: todaysEntries, goalML: goalML)
+        // The timeline's date is the start of the minute; a drink logged a few
+        // seconds later must already count, so use the exact time here.
+        let mood = CompanionLogic.mood(entries: entries, now: max(now, .now))
 
         List {
             Section {
                 progressHeader(summary: summary, progress: progress)
                     .overlay { SplashBurst(trigger: splashTrigger) }
                 if companionEnabled {
-                    CompanionView(progress: progress, belt: belt, stats: stats,
+                    CompanionView(progress: progress, layers: layers, mood: mood, belt: belt,
+                                  prestige: prestigeLevel, stats: stats,
                                   goalDaysTowardBelt: goalDays) { showDojo = true }
                 }
             }
@@ -104,7 +125,10 @@ struct TodayView: View {
         }
         .dojoBackground()
         .sheet(isPresented: $showDojo) {
-            DojoView(progress: progress, belt: belt, stats: stats, goalDays: goalDays)
+            DojoView(progress: progress, layers: layers, mood: mood, belt: belt, stats: stats,
+                     goalDays: goalDays, prestige: prestigeLevel) {
+                startPrestige(totalGoalDays: max(bestGoalDays, stats.goalDays))
+            }
         }
         .onChange(of: stats.goalDays, initial: true) { _, newValue in
             updateRank(goalDays: newValue)
@@ -115,13 +139,23 @@ struct TodayView: View {
     }
 
     /// Remembers the best goal-day count and celebrates a newly earned belt.
-    private func updateRank(goalDays: Int) {
-        bestGoalDays = max(bestGoalDays, goalDays)
-        let belt = Belt.belt(forGoalDays: bestGoalDays)
+    private func updateRank(goalDays totalGoalDays: Int) {
+        bestGoalDays = max(bestGoalDays, totalGoalDays)
+        let belt = Belt.belt(forGoalDays: DojoProgress.rankGoalDays(bestTotal: bestGoalDays,
+                                                                    currentTotal: totalGoalDays,
+                                                                    prestigeBase: prestigeBase))
         if belt.rawValue > awardedBeltRaw {
             awardedBeltRaw = belt.rawValue
             if companionEnabled { earnedBelt = belt }
         }
+    }
+
+    /// Prestige (only after the user confirmed in the dojo): ranks start again
+    /// at white belt, the prestige level goes up. History and goal days stay.
+    private func startPrestige(totalGoalDays: Int) {
+        prestigeBase = totalGoalDays
+        prestigeLevel += 1
+        awardedBeltRaw = Belt.white.rawValue
     }
 
     private func progressHeader(summary: DaySummary, progress: Double) -> some View {

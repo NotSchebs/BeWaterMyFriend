@@ -20,9 +20,15 @@ final class DrinkEntry {
     /// Share of the drink that counts toward the water goal, in percent.
     /// `nil` means automatic (see `DrinkMath.defaultHydrationPercent`).
     var hydrationPercent: Double?
+    /// For powder drinks (electrolytes, protein): grams of powder in the drink.
+    /// Then `nutrientsPer100ml` holds values per 100 g of powder, and
+    /// `volumeML` is the liquid it was mixed with.
+    var powderGrams: Double?
     /// Encoded `Nutrients`. See `NutrientStorage` for why this isn't stored directly.
     var nutrientsData: Data?
     var sourceRaw: String
+    /// Barcode if the drink was scanned.
+    var barcode: String?
 
     // Apple Health sync. All optional so existing databases migrate without data loss.
     /// When the entry was created or last edited. Restarts the Health write delay.
@@ -40,8 +46,10 @@ final class DrinkEntry {
         volumeML: Double,
         alcoholPercent: Double? = nil,
         hydrationPercent: Double? = nil,
+        powderGrams: Double? = nil,
         nutrientsPer100ml: Nutrients = Nutrients(),
-        source: EntrySource = .manual
+        source: EntrySource = .manual,
+        barcode: String? = nil
     ) {
         self.timestamp = timestamp
         self.name = name
@@ -49,8 +57,10 @@ final class DrinkEntry {
         self.volumeML = volumeML
         self.alcoholPercent = alcoholPercent
         self.hydrationPercent = hydrationPercent
+        self.powderGrams = powderGrams
         self.nutrientsData = NutrientStorage.encode(nutrientsPer100ml)
         self.sourceRaw = source.rawValue
+        self.barcode = barcode
         self.modifiedAt = .now
     }
 
@@ -70,9 +80,12 @@ final class DrinkEntry {
         set { sourceRaw = newValue.rawValue }
     }
 
+    /// What the nutrient values are scaled by: grams of powder, or ml of drink.
+    var nutrientBase: Double { powderGrams ?? volumeML }
+
     /// Total amount of a nutrient in this drink, or `nil` if unknown.
     func amount(of nutrient: Nutrient) -> Double? {
-        DrinkMath.scale(nutrientsPer100ml[nutrient], toVolumeML: volumeML)
+        DrinkMath.scale(nutrientsPer100ml[nutrient], toVolumeML: nutrientBase)
     }
 
     var caffeineMg: Double { amount(of: .caffeine) ?? 0 }
@@ -108,10 +121,15 @@ final class DrinkPreset {
     var alcoholPercent: Double?
     /// `nil` = automatic, like on `DrinkEntry`.
     var hydrationPercent: Double?
+    /// Grams of powder for powder drinks, like on `DrinkEntry`.
+    var powderGrams: Double?
     /// Encoded `Nutrients`. See `NutrientStorage` for why this isn't stored directly.
     var nutrientsData: Data?
     var isFavourite: Bool
     var sortOrder: Int
+    /// Barcode of a scanned product. Scanning it again uses this preset,
+    /// including the user's corrections, instead of the online data.
+    var barcode: String?
 
     init(
         name: String,
@@ -119,18 +137,22 @@ final class DrinkPreset {
         volumeML: Double,
         alcoholPercent: Double? = nil,
         hydrationPercent: Double? = nil,
+        powderGrams: Double? = nil,
         nutrientsPer100ml: Nutrients = Nutrients(),
         isFavourite: Bool = false,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        barcode: String? = nil
     ) {
         self.name = name
         self.categoryRaw = category.rawValue
         self.volumeML = volumeML
         self.alcoholPercent = alcoholPercent
         self.hydrationPercent = hydrationPercent
+        self.powderGrams = powderGrams
         self.nutrientsData = NutrientStorage.encode(nutrientsPer100ml)
         self.isFavourite = isFavourite
         self.sortOrder = sortOrder
+        self.barcode = barcode
     }
 
     var category: DrinkCategory {
@@ -152,8 +174,10 @@ final class DrinkPreset {
             volumeML: volumeML,
             alcoholPercent: alcoholPercent,
             hydrationPercent: hydrationPercent,
+            powderGrams: powderGrams,
             nutrientsPer100ml: nutrientsPer100ml,
-            source: .preset
+            source: barcode == nil ? .preset : .scan,
+            barcode: barcode
         )
     }
 }

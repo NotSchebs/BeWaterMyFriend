@@ -34,11 +34,11 @@ struct DaySummary: Identifiable, Equatable {
         alcoholGrams += entry.alcoholGrams
         let nutrients = entry.nutrientsPer100ml  // decode once, not per nutrient
         for nutrient in Nutrient.allCases {
-            if let amount = DrinkMath.scale(nutrients[nutrient], toVolumeML: entry.volumeML) {
+            if let amount = DrinkMath.scale(nutrients[nutrient], toVolumeML: entry.nutrientBase) {
                 nutrientTotals[nutrient, default: 0] += amount
             }
         }
-        caffeineMg += DrinkMath.scale(nutrients.caffeineMg, toVolumeML: entry.volumeML) ?? 0
+        caffeineMg += DrinkMath.scale(nutrients.caffeineMg, toVolumeML: entry.nutrientBase) ?? 0
     }
 }
 

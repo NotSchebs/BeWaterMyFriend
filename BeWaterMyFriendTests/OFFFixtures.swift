@@ -1,0 +1,18 @@
+// Real Open Food Facts responses (trimmed), downloaded 23 Oct 2026.
+enum OFFFixtures {
+    static let redBull = #"""
+{"code": "9002490100070", "status": 1, "product": {"brands": "Red Bull GmbH", "categories_tags": ["en:beverages-and-beverages-preparations", "en:beverages", "en:non-alcoholic-beverages", "en:carbonated-drinks", "en:soft-drinks", "en:sodas", "en:energy-drinks", "en:Napoje", "en:Napoje-energetyczne", "en:Napoje-i-składniki-do-napojow"], "code": "9002490100070", "nutrition_data": "on", "nutrition_data_per": "100ml", "nutrition_data_prepared_per": "100g", "product_name": "Red Bull", "product_quantity": 250, "product_quantity_unit": "ml", "quantity": "250ml", "nutriments": {"added-sugars_100g": 30.79, "caffeine_100g": 0.032, "carbohydrates_100g": 11, "energy-kcal_100g": 46, "fat_100g": 0, "pantothenic-acid_100g": 0.002, "proteins_100g": 0, "salt_100g": 0.1, "saturated-fat_100g": 0, "sodium_100g": 0.04, "sugars_100g": 11, "vitamin-b12_100g": 2e-06, "vitamin-b6_100g": 0.002, "vitamin-pp_100g": 0.008}}}
+"""#
+    static let heinekenKeg = #"""
+{"code": "8712000025649", "status": 1, "product": {"brands": "HEINEKEN, Heineken", "categories_tags": ["en:beverages-and-beverages-preparations", "en:beverages", "en:alcoholic-beverages", "en:beers", "sk:pivo"], "code": "8712000025649", "nutriments_estimated": {"calcium_100g": 0, "cholesterol_100g": 0, "fiber_100g": 0, "iron_100g": 0, "magnesium_100g": 0, "phosphorus_100g": 0, "polyols_100g": 0, "potassium_100g": 0, "starch_100g": 0, "vitamin-b6_100g": 0, "vitamin-c_100g": 0, "vitamin-e_100g": 0, "zinc_100g": 0}, "nutrition_data": "on", "nutrition_data_per": "100g", "nutrition_data_prepared_per": "100g", "product_name": "Heineken 5L Birra", "product_quantity": 5000, "product_quantity_unit": "g", "quantity": "5000 g", "nutriments": {"added-sugars_100g": 0, "alcohol_100g": 5, "carbohydrates_100g": 3.2, "energy-kcal_100g": 42, "fat_100g": 0, "proteins_100g": 0, "salt_100g": 0.01, "saturated-fat_100g": 0, "sodium_100g": 0.004, "sugars_100g": 0}}}
+"""#
+    static let rivellaRot = #"""
+{"code": "7610097111072", "status": 1, "product": {"brands": "Rivella", "categories_tags": ["en:beverages-and-beverages-preparations", "en:beverages", "en:non-alcoholic-beverages", "en:carbonated-drinks", "en:soft-drinks", "en:sodas", "en:sweetened-beverages"], "code": "7610097111072", "nutrition_data": "on", "nutrition_data_per": "100ml", "nutrition_data_prepared_per": "100g", "product_name": "Rivella rot (31)", "product_quantity": 500.0, "product_quantity_unit": "ml", "quantity": "0.5l", "nutriments": {"added-sugars_100g": 4.5, "carbohydrates_100g": 9, "energy-kcal_100g": 37, "fat_100g": 0, "proteins_100g": 0, "salt_100g": 0.03, "saturated-fat_100g": 0, "sodium_100g": 0.012, "sugars_100g": 9}}}
+"""#
+    static let cocaCola = #"""
+{"code": "5449000000996", "status": 1, "product": {"brands": "COCA-COLA SERVICES SA/NV", "categories_tags": ["en:beverages-and-beverages-preparations", "en:beverages", "en:non-alcoholic-beverages", "en:carbonated-drinks", "en:soft-drinks", "en:sodas", "en:colas", "pt:bebidas cafeína"], "code": "5449000000996", "nutrition_data": "on", "nutrition_data_per": "100g", "nutrition_data_prepared_per": "100g", "product_name": "Coca-Cola Original", "product_quantity": 330, "product_quantity_unit": "ml", "quantity": "330 ml", "nutriments": {"added-sugars_100g": 10.6, "carbohydrates_100g": 10.6, "energy-kcal_100g": 42.4, "fat_100g": 0, "proteins_100g": 0, "salt_100g": 0, "saturated-fat_100g": 0, "sodium_100g": 0, "sugars_100g": 10.6}}}
+"""#
+    static let notFound = #"""
+{"code": "7613035833128", "status": 0, "status_verbose": "product not found"}
+"""#
+}

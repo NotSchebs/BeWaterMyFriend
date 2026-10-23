@@ -59,7 +59,7 @@ enum HealthPlan {
         }
         let nutrients = entry.nutrientsPer100ml
         for nutrient in Nutrient.allCases {
-            if let amount = DrinkMath.scale(nutrients[nutrient], toVolumeML: entry.volumeML), amount > 0 {
+            if let amount = DrinkMath.scale(nutrients[nutrient], toVolumeML: entry.nutrientBase), amount > 0 {
                 result.append(PlannedSample(quantity: .nutrient(nutrient), value: amount))
             }
         }

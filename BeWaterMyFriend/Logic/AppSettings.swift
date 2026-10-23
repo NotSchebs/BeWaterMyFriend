@@ -8,6 +8,9 @@ enum SettingsKey {
     static let didSeedPresets = "didSeedPresets"
     static let dojoBestGoalDays = "dojoBestGoalDays"
     static let dojoBelt = "dojoBelt"
+    static let prestigeLevel = "prestigeLevel"
+    /// Total goal days at the last prestige; ranks count from here.
+    static let prestigeBaseGoalDays = "prestigeBaseGoalDays"
     static let healthSyncEnabled = "healthSyncEnabled"
     static let healthWriteDelay = "healthWriteDelay"
 }

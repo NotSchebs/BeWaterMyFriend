@@ -11,8 +11,16 @@ struct DrinkDraft {
     var alcoholPercent: Double?
     /// `nil` = automatic.
     var hydrationPercent: Double?
+    /// Grams of powder, only used for powder categories.
+    var powderGrams: Double?
     var nutrientsPer100ml = Nutrients()
     var isFavourite = false
+    var source: EntrySource = .manual
+    var barcode: String?
+    /// For scans: also keep it as a preset so corrections are reused next time.
+    var saveAsPreset = false
+    /// For scans: what the database said, shown as a hint while reviewing.
+    var scanNote: String?
 
     var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty && volumeML > 0
@@ -27,7 +35,48 @@ struct DrinkDraft {
         volumeML = entry.volumeML
         alcoholPercent = entry.alcoholPercent
         hydrationPercent = entry.hydrationPercent
+        powderGrams = entry.powderGrams
         nutrientsPer100ml = entry.nutrientsPer100ml
+    }
+
+    /// Pre-filled from a scan, for the user to review before saving.
+    init(scanned product: ScannedProduct) {
+        name = product.name
+        category = product.category
+        volumeML = product.suggestedVolumeML
+        powderGrams = product.powderGrams
+        alcoholPercent = product.alcoholPercent
+        nutrientsPer100ml = product.nutrientsPer100ml
+        source = .scan
+        barcode = product.barcode
+        saveAsPreset = true
+        var notes = ["From Open Food Facts. Check the values, especially caffeine, before saving."]
+        if let package = product.packageVolumeML, package != product.suggestedVolumeML {
+            notes.append("Package: \(Int(package)) ml.")
+        }
+        if product.powderGrams != nil {
+            notes.append("Powder: values are per 100 g of powder. Set your scoop size and how much liquid you mixed it with.")
+        } else if product.valuesWerePer100g {
+            notes.append("Values were given per 100 g and are used as per 100 ml.")
+        }
+        scanNote = notes.joined(separator: " ")
+    }
+
+    /// From a saved preset with the same barcode.
+    init(scannedPreset preset: DrinkPreset) {
+        self.init(preset: preset)
+        source = .scan
+        saveAsPreset = true  // corrections made now update the saved version
+        scanNote = "Your saved version of this product."
+    }
+
+    /// Unknown product: the user enters it; it's remembered for next time.
+    init(unknownBarcode barcode: String) {
+        name = ""
+        source = .scan
+        self.barcode = barcode
+        saveAsPreset = true
+        scanNote = "Not found in Open Food Facts. Enter it once and it will be remembered for this barcode."
     }
 
     init(preset: DrinkPreset) {
@@ -36,8 +85,10 @@ struct DrinkDraft {
         volumeML = preset.volumeML
         alcoholPercent = preset.alcoholPercent
         hydrationPercent = preset.hydrationPercent
+        powderGrams = preset.powderGrams
         nutrientsPer100ml = preset.nutrientsPer100ml
         isFavourite = preset.isFavourite
+        barcode = preset.barcode
     }
 
     var automaticHydrationPercent: Double {
@@ -49,6 +100,14 @@ struct DrinkDraft {
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
+
+    /// Powder only applies to powder categories.
+    var effectivePowderGrams: Double? {
+        category.isPowderMix ? (powderGrams ?? category.typicalPowderGrams) : nil
+    }
+
+    /// What nutrient values are scaled by in the editor.
+    var nutrientBase: Double { effectivePowderGrams ?? volumeML }
 
     /// Alcohol only applies to alcoholic categories.
     private var effectiveAlcoholPercent: Double? {
@@ -62,6 +121,7 @@ struct DrinkDraft {
         entry.volumeML = volumeML
         entry.alcoholPercent = effectiveAlcoholPercent
         entry.hydrationPercent = hydrationPercent
+        entry.powderGrams = effectivePowderGrams
         entry.nutrientsPer100ml = nutrientsPer100ml
         entry.modifiedAt = .now  // restarts the Apple Health write delay
     }
@@ -72,8 +132,10 @@ struct DrinkDraft {
         preset.volumeML = volumeML
         preset.alcoholPercent = effectiveAlcoholPercent
         preset.hydrationPercent = hydrationPercent
+        preset.powderGrams = effectivePowderGrams
         preset.nutrientsPer100ml = nutrientsPer100ml
         preset.isFavourite = isFavourite
+        if let barcode { preset.barcode = barcode }
     }
 
     func makeEntry() -> DrinkEntry {
@@ -84,8 +146,10 @@ struct DrinkDraft {
             volumeML: volumeML,
             alcoholPercent: effectiveAlcoholPercent,
             hydrationPercent: hydrationPercent,
+            powderGrams: effectivePowderGrams,
             nutrientsPer100ml: nutrientsPer100ml,
-            source: .manual
+            source: source,
+            barcode: barcode
         )
     }
 
@@ -96,9 +160,11 @@ struct DrinkDraft {
             volumeML: volumeML,
             alcoholPercent: effectiveAlcoholPercent,
             hydrationPercent: hydrationPercent,
+            powderGrams: effectivePowderGrams,
             nutrientsPer100ml: nutrientsPer100ml,
             isFavourite: isFavourite,
-            sortOrder: sortOrder
+            sortOrder: sortOrder,
+            barcode: barcode
         )
     }
 }

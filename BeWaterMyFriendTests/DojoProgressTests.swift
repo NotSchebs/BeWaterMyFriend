@@ -16,8 +16,37 @@ final class DojoProgressTests: XCTestCase {
         XCTAssertEqual(Belt.belt(forGoalDays: 3), .yellow)
         XCTAssertEqual(Belt.belt(forGoalDays: 29), .green)
         XCTAssertEqual(Belt.belt(forGoalDays: 100), .black)
-        XCTAssertEqual(Belt.belt(forGoalDays: 5000), .black)
-        XCTAssertNil(Belt.black.next)
+        XCTAssertEqual(Belt.belt(forGoalDays: 149), .black)
+        XCTAssertEqual(Belt.belt(forGoalDays: 150), .dan1)
+        XCTAssertEqual(Belt.belt(forGoalDays: 365), .dan4)
+        XCTAssertEqual(Belt.belt(forGoalDays: 5000), .dan10)
+        XCTAssertEqual(Belt.black.next, .dan1)
+        XCTAssertNil(Belt.dan10.next)
+    }
+
+    func testDanNames() {
+        XCTAssertNil(Belt.black.danLevel)
+        XCTAssertEqual(Belt.dan1.danLevel, 1)
+        XCTAssertEqual(Belt.dan10.danLevel, 10)
+        XCTAssertEqual(Belt.dan1.name, "1st Dan")
+        XCTAssertEqual(Belt.dan2.name, "2nd Dan")
+        XCTAssertEqual(Belt.dan3.name, "3rd Dan")
+        XCTAssertEqual(Belt.dan10.name, "10th Dan")
+        XCTAssertEqual(Belt.dan10.japaneseName, "Jūdan")
+        XCTAssertNil(Belt.brown.japaneseName)
+    }
+
+    func testPrestigeRestartsRanksButKeepsHistory() {
+        // 1,000 goal days → 10th Dan, prestige offered.
+        XCTAssertEqual(Belt.belt(forGoalDays: DojoProgress.rankGoalDays(bestTotal: 1000, currentTotal: 1000, prestigeBase: 0)), .dan10)
+        XCTAssertTrue(DojoProgress.canPrestige(.dan10))
+        XCTAssertFalse(DojoProgress.canPrestige(.dan9))
+        // After prestige at 1,000: back to white belt, ranks count from there.
+        XCTAssertEqual(DojoProgress.rankGoalDays(bestTotal: 1000, currentTotal: 1000, prestigeBase: 1000), 0)
+        XCTAssertEqual(Belt.belt(forGoalDays: DojoProgress.rankGoalDays(bestTotal: 1003, currentTotal: 1003, prestigeBase: 1000)), .yellow)
+        // Never negative, and the best total still protects against deleted entries.
+        XCTAssertEqual(DojoProgress.rankGoalDays(bestTotal: 1010, currentTotal: 990, prestigeBase: 1000), 10)
+        XCTAssertEqual(DojoProgress.rankGoalDays(bestTotal: 0, currentTotal: 0, prestigeBase: 1000), 0)
     }
 
     func testBeltRequirementsIncrease() {

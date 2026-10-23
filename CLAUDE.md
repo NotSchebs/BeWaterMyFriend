@@ -22,6 +22,9 @@ BeWaterMyFriend: SwiftUI + SwiftData hydration tracker for iPhone, later with He
 - Test-driven for daily/weekly/monthly totals, the day boundary and goal calculation. UI is checked manually.
 - Layout: `Model/` (SwiftData models, `Nutrients`), `Logic/` (pure, tested: `DrinkMath`, `DayBoundary`, `Summaries`, `DojoProgress`, `HealthPlan`, `EntryActions`), `Health/` (the only file that imports HealthKit), `Views/`. Tests mirror `Logic/` and `Model/`.
 - Health sync: each entry's samples carry its `healthSyncID` in metadata; edits delete and rewrite them, deletes go through `EntryActions.delete` so Health is cleaned up too. Writes respect the user's delay (`HealthWriteDelay`); every edit restarts it.
+- Scanning: `Logic/OpenFoodFacts.swift` parses Open Food Facts (values in grams → app units; tested with saved real responses in `OFFFixtures`). Every scan goes through the review editor; a preset with the same barcode wins over online data. Camera via VisionKit only works on a real device.
+- Powder drinks (`.electrolytes`, `.proteinShake`): `powderGrams` set → nutrients are per 100 g of powder, scaled via `entry.nutrientBase`; `volumeML` is the liquid. Always scale nutrients with `nutrientBase`, never `volumeML` directly.
+- Ranks: `Belt` covers coloured belts and 10 Dan ranks; prestige (opt-in, confirmed) offsets rank goal days via `prestigeBaseGoalDays`. Companion colours and moods come from `CompanionLogic` (pure, tested).
 - New SwiftData properties must be optional (or have a default) so existing databases on test phones migrate.
 - With Swift 6 + MainActor default isolation, custom `Shape`s and pure value types need `nonisolated`.
 - Nutrients are stored **per 100 ml**; totals are always computed from the current volume. They are saved as encoded `Data` (see `NutrientStorage`) because SwiftData crashes when reloading a struct whose fields are all nil.

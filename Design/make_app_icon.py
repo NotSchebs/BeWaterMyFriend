@@ -1,0 +1,70 @@
+"""Polished app icon: the ninja drop (concept 1) with a red 水 seal (from concept 2).
+Full-bleed square; iOS applies the rounded mask itself."""
+import sys
+
+sys.path.insert(0, sys.argv[2])
+from make_icons import seigaiha  # reuse the wave pattern
+
+DROP = "M512 168 C 546 312, 748 452, 748 628 A 236 236 0 0 1 276 628 C 276 452, 478 312, 512 168 Z"
+
+svg = f'''<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.32" r="0.85">
+      <stop offset="0" stop-color="#2E63BE"/>
+      <stop offset="0.6" stop-color="#1D4590"/>
+      <stop offset="1" stop-color="#0F2A5C"/>
+    </radialGradient>
+    <linearGradient id="water" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#A9D4FA"/>
+      <stop offset="0.55" stop-color="#5BA6F2"/>
+      <stop offset="1" stop-color="#3A86E0"/>
+    </linearGradient>
+    <linearGradient id="mask" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B2B30"/>
+      <stop offset="1" stop-color="#121214"/>
+    </linearGradient>
+    <linearGradient id="tail" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#A5221C"/>
+      <stop offset="1" stop-color="#D8402F"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#06152F" flood-opacity="0.45"/>
+    </filter>
+    <clipPath id="dropClip"><path d="{DROP}"/></clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  {seigaiha(1024, 1024, 120, "#FFFFFF", "none", 0.035)}
+
+  <!-- headband tails, flowing behind the drop -->
+  <path d="M742 612 C 812 590, 860 560, 908 512 C 900 560, 870 604, 820 640 C 800 650, 770 650, 742 644 Z" fill="url(#tail)"/>
+  <path d="M742 640 C 806 656, 852 680, 892 724 C 846 718, 800 700, 760 676 Z" fill="#B92C22"/>
+
+  <g filter="url(#shadow)">
+    <path d="{DROP}" fill="url(#water)"/>
+  </g>
+  <!-- inner shading and highlight -->
+  <g clip-path="url(#dropClip)">
+    <ellipse cx="600" cy="760" rx="260" ry="170" fill="#2F74CF" opacity="0.35"/>
+    <path d="M438 330 C 400 400, 366 476, 356 560" fill="none" stroke="#FFFFFF" stroke-opacity="0.6" stroke-width="28" stroke-linecap="round"/>
+    <circle cx="372" cy="612" r="14" fill="#FFFFFF" opacity="0.55"/>
+  </g>
+  <path d="{DROP}" fill="none" stroke="#0A1C40" stroke-width="22" stroke-linejoin="round"/>
+
+  <!-- ninja mask with knot and eyes -->
+  <rect x="246" y="590" width="532" height="112" rx="56" fill="url(#mask)"/>
+  <rect x="262" y="598" width="500" height="18" rx="9" fill="#FFFFFF" opacity="0.08"/>
+  <circle cx="752" cy="640" r="30" fill="#141416"/>
+  <path d="M364 646 L 456 660 Q 462 672 452 678 L 372 666 Q 356 660 364 646 Z" fill="#FFFFFF"/>
+  <path d="M660 646 L 568 660 Q 562 672 572 678 L 652 666 Q 668 660 660 646 Z" fill="#FFFFFF"/>
+
+  <!-- red seal with 水 (water) -->
+  <g transform="translate(812 822) rotate(-6)">
+    <rect x="-74" y="-74" width="148" height="148" rx="22" fill="#C2332B"/>
+    <rect x="-62" y="-62" width="124" height="124" rx="14" fill="none" stroke="#F5EFE3" stroke-width="6" opacity="0.9"/>
+    <text x="0" y="34" font-family="Hiragino Mincho ProN, Songti SC, serif" font-size="100" font-weight="600" fill="#F5EFE3" text-anchor="middle">水</text>
+  </g>
+</svg>'''
+
+open(sys.argv[1], "w", encoding="utf-8").write(svg)
+print("ok")

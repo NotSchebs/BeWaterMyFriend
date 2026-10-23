@@ -1,12 +1,16 @@
 import Foundation
 
-/// Belt ranks of the ninja drop, earned by days on which the water goal was
-/// reached. Rewards only ever go up: the highest rank is remembered, so a belt
-/// is never lost (not even after raising the goal or deleting entries).
+/// Ranks of the ninja drop, earned by days on which the water goal was reached.
+/// Coloured belts lead to the black belt; after that come ten Dan ranks, like in
+/// judo and BJJ ("black belt is only the beginning"). Rewards only go up: the
+/// highest rank is remembered, so it's never lost (not even after raising the
+/// goal or deleting entries). The only reset is the optional prestige, which
+/// the user has to confirm.
 nonisolated enum Belt: Int, CaseIterable, Comparable, Sendable {
     case white, yellow, orange, green, blue, purple, brown, black
+    case dan1, dan2, dan3, dan4, dan5, dan6, dan7, dan8, dan9, dan10
 
-    /// Total goal days needed for this belt.
+    /// Goal days needed for this rank.
     var requiredGoalDays: Int {
         switch self {
         case .white: 0
@@ -17,19 +21,57 @@ nonisolated enum Belt: Int, CaseIterable, Comparable, Sendable {
         case .purple: 50
         case .brown: 75
         case .black: 100
+        case .dan1: 150
+        case .dan2: 200
+        case .dan3: 275
+        case .dan4: 365
+        case .dan5: 450
+        case .dan6: 550
+        case .dan7: 650
+        case .dan8: 750
+        case .dan9: 875
+        case .dan10: 1000
         }
     }
 
+    /// 1…10 for Dan ranks, `nil` for coloured belts.
+    var danLevel: Int? {
+        rawValue >= Belt.dan1.rawValue ? rawValue - Belt.black.rawValue : nil
+    }
+
+    var isDan: Bool { danLevel != nil }
+
     var name: String {
         switch self {
-        case .white: "White belt"
-        case .yellow: "Yellow belt"
-        case .orange: "Orange belt"
-        case .green: "Green belt"
-        case .blue: "Blue belt"
-        case .purple: "Purple belt"
-        case .brown: "Brown belt"
-        case .black: "Black belt"
+        case .white: return "White belt"
+        case .yellow: return "Yellow belt"
+        case .orange: return "Orange belt"
+        case .green: return "Green belt"
+        case .blue: return "Blue belt"
+        case .purple: return "Purple belt"
+        case .brown: return "Brown belt"
+        case .black: return "Black belt"
+        default:
+            let level = danLevel ?? 1
+            let suffix = switch level { case 1: "st"; case 2: "nd"; case 3: "rd"; default: "th" }
+            return "\(level)\(suffix) Dan"
+        }
+    }
+
+    /// Japanese rank name for Dan ranks.
+    var japaneseName: String? {
+        switch self {
+        case .dan1: "Shodan"
+        case .dan2: "Nidan"
+        case .dan3: "Sandan"
+        case .dan4: "Yondan"
+        case .dan5: "Godan"
+        case .dan6: "Rokudan"
+        case .dan7: "Nanadan"
+        case .dan8: "Hachidan"
+        case .dan9: "Kudan"
+        case .dan10: "Jūdan"
+        default: nil
         }
     }
 
@@ -43,6 +85,16 @@ nonisolated enum Belt: Int, CaseIterable, Comparable, Sendable {
         case .purple: "Waterfall"
         case .brown: "Ocean"
         case .black: "Water master"
+        case .dan1: "Tide"
+        case .dan2: "Current"
+        case .dan3: "Rapids"
+        case .dan4: "Monsoon"
+        case .dan5: "Glacier"
+        case .dan6: "Typhoon"
+        case .dan7: "Abyss"
+        case .dan8: "Tsunami"
+        case .dan9: "Moon tide"
+        case .dan10: "Sea dragon"
         }
     }
 
@@ -93,6 +145,16 @@ enum DojoProgress {
         }
         return stats
     }
+
+    /// Goal days that count toward the current rank. Prestige restarts the
+    /// ranks from white belt; goal days before it are kept in history but no
+    /// longer count toward the belt.
+    static func rankGoalDays(bestTotal: Int, currentTotal: Int, prestigeBase: Int) -> Int {
+        max(max(bestTotal, currentTotal) - prestigeBase, 0)
+    }
+
+    /// Prestige is offered once the highest Dan rank is reached.
+    static func canPrestige(_ belt: Belt) -> Bool { belt == .dan10 }
 
     /// The companion's size: grows from 80 % to 100 % with today's progress.
     static func companionScale(progress: Double) -> Double {
