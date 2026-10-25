@@ -31,6 +31,8 @@ final class HealthSync {
     private(set) var lastSync: Date?
     /// Plain-language result of the last sync, shown in Settings.
     private(set) var lastResult: String?
+    /// Increases after every "write now", so the UI can react (haptic, checkmark).
+    private(set) var manualSyncCount = 0
     /// A "write now" request that arrived while a sync was running.
     private var forceRequested = false
 
@@ -61,18 +63,26 @@ final class HealthSync {
             if ignoreDelay { forceRequested = true }
             return
         }
+        // Take the lock *before* the first `await`. Otherwise two syncs (e.g. a
+        // button tap and the save that follows it) can both get past the check
+        // above while waiting, and both write the same drinks: duplicates.
+        isSyncing = true
+        var manual = ignoreDelay  // also true if a "write now" tap got queued
+        defer {
+            isSyncing = false
+            if manual { manualSyncCount += 1 }
+        }
         // Never sync while the permission screen is open or unanswered: every
         // type would look "not allowed" and nothing would be written.
         guard await hasAnsweredPermission() else {
             if ignoreDelay { lastResult = "Allow access to Apple Health first." }
             return
         }
-        isSyncing = true
-        defer { isSyncing = false }
 
         var force = ignoreDelay
         var written = 0
         do {
+            if try await repairDuplicatesIfNeeded(context: context) { force = true }
             repeat {
                 forceRequested = false
                 for id in PendingHealthDeletes.all() {
@@ -89,11 +99,12 @@ final class HealthSync {
                 }
                 if !due.isEmpty { try context.save() }
                 force = true  // a queued request is always a "write now"
+                if forceRequested { manual = true }
             } while forceRequested
 
             lastError = nil
             lastSync = now
-            if ignoreDelay || written > 0 {
+            if manual || written > 0 {
                 let pending = try context.fetch(FetchDescriptor<DrinkEntry>()).filter(\.needsHealthWrite).count
                 lastResult = written > 0
                     ? "Wrote \(written) \(written == 1 ? "drink" : "drinks") to Apple Health."
@@ -104,15 +115,26 @@ final class HealthSync {
         }
     }
 
-    /// Marks every drink as not written, then writes them all again. Safe to use:
-    /// each drink's old samples are deleted (by sync ID) before it is rewritten.
-    func resendAll(context: ModelContext, delay: HealthWriteDelay, boundary: DayBoundary) async {
-        guard !isSyncing, let entries = try? context.fetch(FetchDescriptor<DrinkEntry>()) else { return }
-        for entry in entries where entry.healthWrittenAt != nil {
-            entry.healthWrittenAt = .distantPast  // keeps its sync ID, so old samples get deleted first
+    /// One-time cleanup after the duplicate bug (fixed 25 Oct): deletes every
+    /// sample this app ever wrote and marks all drinks as unwritten, so each is
+    /// written exactly once again. Only this app's own data can be deleted.
+    /// https://developer.apple.com/documentation/healthkit/hkquery/predicateforobjects(from:)-7j3p2
+    private func repairDuplicatesIfNeeded(context: ModelContext) async throws -> Bool {
+        let key = "healthDuplicateRepairDone"
+        guard !UserDefaults.standard.bool(forKey: key) else { return false }
+        let ownSamples = HKQuery.predicateForObjects(from: HKSource.default())
+        for quantity in HealthQuantity.all {
+            let type = Self.sampleType(quantity)
+            guard store.authorizationStatus(for: type) == .sharingAuthorized else { continue }
+            _ = try await store.deleteObjects(of: type, predicate: ownSamples)
         }
-        try? context.save()
-        await sync(context: context, delay: delay, boundary: boundary, ignoreDelay: true)
+        for id in PendingHealthDeletes.all() { PendingHealthDeletes.remove(id) }
+        for entry in try context.fetch(FetchDescriptor<DrinkEntry>()) {
+            entry.healthWrittenAt = nil
+        }
+        try context.save()
+        UserDefaults.standard.set(true, forKey: key)
+        return true
     }
 
     /// Returns false (entry stays pending) if Health access for one of its
@@ -126,7 +148,9 @@ final class HealthSync {
         // Snapshot the version first: an edit during the async calls below stays pending.
         let version = entry.modifiedAt ?? entry.timestamp
         let id = entry.healthSyncID ?? UUID()
-        if entry.healthWrittenAt != nil, entry.healthSyncID != nil {
+        // Always clear this drink's old samples first, so a write can never
+        // leave two copies behind.
+        if entry.healthSyncID != nil {
             try await deleteSamples(syncID: id)
         }
 

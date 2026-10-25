@@ -19,6 +19,7 @@ struct TodayView: View {
 
     @State private var editor: EditorMode?
     @State private var showScanner = false
+    private var router = AppRouter.shared
     @State private var loggedCount = 0
     @State private var showDojo = false
     @State private var earnedBelt: Belt?
@@ -55,6 +56,15 @@ struct TodayView: View {
                 BeltEarnedView(belt: belt)
             }
             .sensoryFeedback(.success, trigger: loggedCount)
+            // Opened from a reminder's "New drink" or "Scan" button.
+            .onChange(of: router.pendingAction, initial: true) { _, action in
+                switch action {
+                case .newDrink: editor = .newEntry
+                case .scan: showScanner = true
+                case nil: return
+                }
+                router.pendingAction = nil
+            }
         }
     }
 

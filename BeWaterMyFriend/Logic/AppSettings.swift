@@ -13,6 +13,27 @@ enum SettingsKey {
     static let prestigeBaseGoalDays = "prestigeBaseGoalDays"
     static let healthSyncEnabled = "healthSyncEnabled"
     static let healthWriteDelay = "healthWriteDelay"
+    static let appearance = "appearance"
+    static let remindersEnabled = "remindersEnabled"
+    static let reminderStartMinutes = "reminderStartMinutes"
+    static let reminderEndMinutes = "reminderEndMinutes"
+    static let reminderIntervalMinutes = "reminderIntervalMinutes"
+    static let reminderSkipOnTrack = "reminderSkipOnTrack"
+}
+
+/// Light, dark, or follow the system setting.
+enum Appearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
 }
 
 enum SettingsDefault {

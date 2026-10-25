@@ -7,8 +7,18 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
     @AppStorage(SettingsKey.healthSyncEnabled) private var healthEnabled = false
     @AppStorage(SettingsKey.healthWriteDelay) private var delayRaw = HealthWriteDelay.oneHour.rawValue
+    @AppStorage(SettingsKey.appearance) private var appearanceRaw = Appearance.system.rawValue
+    @AppStorage(SettingsKey.remindersEnabled) private var remindersEnabled = false
+    @AppStorage(SettingsKey.reminderStartMinutes) private var reminderStart = ReminderSettings().startMinutes
+    @AppStorage(SettingsKey.reminderEndMinutes) private var reminderEnd = ReminderSettings().endMinutes
+    @AppStorage(SettingsKey.reminderIntervalMinutes) private var reminderInterval = ReminderSettings().intervalMinutes
+    @AppStorage(SettingsKey.reminderSkipOnTrack) private var reminderSkipOnTrack = ReminderSettings().skipWhenOnTrack
+    @State private var notificationsDenied = false
     @Environment(\.modelContext) private var context
+    @Query private var allEntries: [DrinkEntry]
     private var health = HealthSync.shared
+    @State private var isWritingNow = false
+    @State private var showResult = false
 
     var body: some View {
         NavigationStack {
@@ -32,8 +42,16 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Appearance", selection: $appearanceRaw) {
+                        ForEach(Appearance.allCases) { appearance in
+                            Text(appearance.label).tag(appearance.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
                     Toggle("Ninja drop", isOn: $companionEnabled)
                 }
+
+                remindersSection
 
                 healthSection
 
@@ -50,8 +68,66 @@ struct SettingsView: View {
                 }
             }
             .dojoBackground()
+            .sensoryFeedback(.success, trigger: health.manualSyncCount)
             .navigationTitle("Settings")
         }
+    }
+
+    private var remindersSection: some View {
+        Section {
+            Toggle("Remind me to drink", isOn: $remindersEnabled)
+                .onChange(of: remindersEnabled) { _, isOn in
+                    Task {
+                        if isOn {
+                            let allowed = await ReminderScheduler.shared.requestPermission()
+                            notificationsDenied = !allowed
+                            if !allowed { remindersEnabled = false }
+                        }
+                        await ReminderScheduler.shared.reschedule(context: context)
+                    }
+                }
+            if notificationsDenied {
+                Text("Notifications are turned off for BeWaterMyFriend. You can allow them in the iPhone's Settings app.")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+            }
+            if remindersEnabled {
+                DatePicker("From", selection: timeBinding($reminderStart), displayedComponents: .hourAndMinute)
+                DatePicker("Until", selection: timeBinding($reminderEnd), displayedComponents: .hourAndMinute)
+                Picker("About every", selection: $reminderInterval) {
+                    ForEach([30, 45, 60, 90, 120, 180], id: \.self) { minutes in
+                        Text(minutes < 60 ? "\(minutes) min"
+                             : (minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"))
+                            .tag(minutes)
+                    }
+                }
+                Toggle("Skip when I'm on track", isOn: $reminderSkipOnTrack)
+            }
+        } header: {
+            Text("Reminders")
+        } footer: {
+            Text("Reminders come at a random moment within each interval, so they don't feel robotic. Long-press a reminder to log your last drink again, add a new one, or scan. \"Skip when I'm on track\" leaves out today's reminders while you're ahead of an even pace.")
+        }
+        .onChange(of: [reminderStart, reminderEnd, reminderInterval]) {
+            Task { await ReminderScheduler.shared.reschedule(context: context) }
+        }
+        .onChange(of: reminderSkipOnTrack) {
+            Task { await ReminderScheduler.shared.reschedule(context: context) }
+        }
+    }
+
+    /// Edits a "minutes after midnight" value with a time picker.
+    private func timeBinding(_ minutes: Binding<Int>) -> Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: minutes.wrappedValue / 60, minute: minutes.wrappedValue % 60,
+                                      second: 0, of: .now) ?? .now
+            },
+            set: { date in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+                minutes.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+            }
+        )
     }
 
     @ViewBuilder
@@ -72,30 +148,25 @@ struct SettingsView: View {
                             Text(delay.label).tag(delay.rawValue)
                         }
                     }
+                    pendingStatus
                     Button {
-                        Task { await syncNow(ignoreDelay: true) }
+                        writeNow()
                     } label: {
                         HStack {
-                            Text("Write pending drinks now")
-                            if health.isSyncing {
-                                Spacer()
+                            Label(isWritingNow ? "Writing to Apple Health…" : "Write pending drinks now",
+                                  systemImage: "arrow.up.heart")
+                            Spacer()
+                            if isWritingNow {
                                 ProgressView()
                             }
                         }
                     }
-                    .disabled(health.isSyncing)
-                    Button("Resend all drinks") {
-                        Task {
-                            await health.resendAll(context: context,
-                                                   delay: HealthWriteDelay(rawValue: delayRaw) ?? .oneHour,
-                                                   boundary: DayBoundary(dayEndMinutes: dayEndMinutes))
-                        }
-                    }
-                    .disabled(health.isSyncing)
-                    if let result = health.lastResult {
-                        Text(result)
+                    .disabled(isWritingNow)
+                    if showResult, let result = health.lastResult {
+                        Label(result, systemImage: "checkmark.circle.fill")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.green)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if let error = health.lastError {
                         Text(error)
@@ -113,6 +184,47 @@ struct SettingsView: View {
             Text("Apple Health")
         } footer: {
             Text("Writes water (with each drink's percentage), caffeine, alcohol and known nutrients. Waiting gives you time to fix mistakes before they reach Health; drinks keep their original time. Edits and deletes are updated in Health too. Writing happens while the app is open.")
+        }
+    }
+
+    /// How many drinks are still waiting, and when the next one is due.
+    @ViewBuilder
+    private var pendingStatus: some View {
+        let delay = HealthWriteDelay(rawValue: delayRaw) ?? .oneHour
+        let boundary = DayBoundary(dayEndMinutes: dayEndMinutes)
+        let pending = allEntries.filter(\.needsHealthWrite)
+        if pending.isEmpty {
+            Label("All drinks are in Apple Health", systemImage: "checkmark.circle")
+                .foregroundStyle(.secondary)
+        } else {
+            let next = pending
+                .map { HealthPlan.dueDate(timestamp: $0.timestamp, modifiedAt: $0.modifiedAt, delay: delay, boundary: boundary) }
+                .min() ?? .now
+            let when = next <= .now ? "next check" : "next at \(next.formatted(date: .omitted, time: .shortened))"
+            Label("\(Format.count(pending.count, "drink", "drinks")) waiting · \(when)", systemImage: "clock")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    /// Writes everything pending, with visible progress and a result that
+    /// stays for a few seconds, so the tap always gets feedback.
+    private func writeNow() {
+        isWritingNow = true
+        showResult = false
+        Task {
+            let started = Date.now
+            await syncNow(ignoreDelay: true)
+            // If an automatic sync was already running, our tap was queued: wait for it.
+            while health.isSyncing { try? await Task.sleep(for: .milliseconds(100)) }
+            // Keep the spinner visible briefly, even when writing is instant.
+            let elapsed = Date.now.timeIntervalSince(started)
+            if elapsed < 0.8 { try? await Task.sleep(for: .seconds(0.8 - elapsed)) }
+            withAnimation {
+                isWritingNow = false
+                showResult = true
+            }
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation { showResult = false }
         }
     }
 

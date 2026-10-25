@@ -112,14 +112,16 @@ struct NinjaDrop: View {
                         .offset(y: h * 0.27)
                     }
 
-                    // Mask band with eyes.
-                    Capsule()
-                        .fill(Color(white: 0.12))
+                    // Mask band in the belt's colour, with eyes.
+                    BeltPattern(belt: belt)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(belt.metalColor ?? Color.black.opacity(belt.isLight ? 0.35 : 0),
+                                                  lineWidth: belt.metalColor == nil ? 1 : 2))
                         .frame(width: w * 0.92, height: h * 0.17)
                         .offset(y: h * 0.12)
                     HStack(spacing: w * 0.16) {
-                        Eye(style: eyeStyle)
-                        Eye(style: eyeStyle, mirrored: true)
+                        Eye(style: eyeStyle, color: belt.isLight ? Color(white: 0.15) : .white)
+                        Eye(style: eyeStyle, mirrored: true, color: belt.isLight ? Color(white: 0.15) : .white)
                     }
                     .frame(width: w * 0.52, height: h * 0.075)
                     .offset(y: h * 0.12)
@@ -230,26 +232,27 @@ private struct Eye: View {
     enum Style { case focused, happy, wide, sleepy, dizzy }
     var style: Style
     var mirrored = false
+    var color: Color = .white
 
     var body: some View {
         switch style {
         case .happy:
             HappyEyeShape()
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
         case .wide:
-            Circle().fill(Color.white).scaleEffect(1.5)
+            Circle().fill(color).scaleEffect(1.5)
         case .sleepy:
-            Capsule().fill(Color.white).scaleEffect(x: 1, y: 0.35).offset(y: 2)
+            Capsule().fill(color).scaleEffect(x: 1, y: 0.35).offset(y: 2)
         case .dizzy:
             // × eyes
             ZStack {
-                Capsule().fill(Color.white).frame(height: 2.5).rotationEffect(.degrees(40))
-                Capsule().fill(Color.white).frame(height: 2.5).rotationEffect(.degrees(-40))
+                Capsule().fill(color).frame(height: 2.5).rotationEffect(.degrees(40))
+                Capsule().fill(color).frame(height: 2.5).rotationEffect(.degrees(-40))
             }
             .scaleEffect(0.8)
         case .focused:
             Capsule()
-                .fill(Color.white)
+                .fill(color)
                 .rotationEffect(.degrees(mirrored ? -10 : 10))
         }
     }
@@ -342,27 +345,8 @@ struct BeltBadge: View {
     var belt: Belt
 
     var body: some View {
-        ZStack {
-            if belt == .dan6 || belt == .dan7 || belt == .dan8 {
-                HStack(spacing: 0) {
-                    ForEach(0..<6) { i in
-                        Rectangle().fill(i.isMultiple(of: 2) ? belt.color : belt.secondaryColor)
-                    }
-                }
-            } else {
-                Rectangle().fill(belt.color)
-            }
-            if let level = belt.danLevel, level <= 5 {
-                HStack(spacing: 1.5) {
-                    ForEach(0..<level, id: \.self) { _ in
-                        Rectangle().fill(belt.secondaryColor).frame(width: 1.5)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .padding(.trailing, 2)
-            }
-        }
-        .clipShape(.rect(cornerRadius: 2))
+        BeltPattern(belt: belt)
+            .clipShape(.rect(cornerRadius: 2))
         .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.black.opacity(belt == .white ? 0.35 : 0), lineWidth: 1))
         .overlay {
             if let metal = belt.metalColor {
@@ -374,7 +358,42 @@ struct BeltBadge: View {
     }
 }
 
+/// The belt's look as a fill: plain colour, gold Dan stripes (1st–5th),
+/// or red-and-white blocks (6th–8th). Used for badges and the drop's mask.
+struct BeltPattern: View {
+    var belt: Belt
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                if belt == .dan6 || belt == .dan7 || belt == .dan8 {
+                    HStack(spacing: 0) {
+                        ForEach(0..<6) { i in
+                            Rectangle().fill(i.isMultiple(of: 2) ? belt.color : belt.secondaryColor)
+                        }
+                    }
+                } else {
+                    Rectangle().fill(belt.color)
+                }
+                if let level = belt.danLevel, level <= 5 {
+                    let stripe = max(geo.size.width * 0.03, 1.5)
+                    HStack(spacing: stripe) {
+                        ForEach(0..<level, id: \.self) { _ in
+                            Rectangle().fill(belt.secondaryColor).frame(width: stripe)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, geo.size.width * 0.12)
+                }
+            }
+        }
+    }
+}
+
 extension Belt {
+    /// Light belts need dark eyes on the mask.
+    var isLight: Bool { self == .white || self == .yellow }
+
     var color: Color {
         switch self {
         case .white: Color(white: 0.97)

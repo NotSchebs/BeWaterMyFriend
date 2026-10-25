@@ -25,6 +25,8 @@ BeWaterMyFriend: SwiftUI + SwiftData hydration tracker for iPhone, later with He
 - Scanning: `Logic/OpenFoodFacts.swift` parses Open Food Facts (values in grams → app units; tested with saved real responses in `OFFFixtures`). Every scan goes through the review editor; a preset with the same barcode wins over online data. Camera via VisionKit only works on a real device.
 - Powder drinks (`.electrolytes`, `.proteinShake`): `powderGrams` set → nutrients are per 100 g of powder, scaled via `entry.nutrientBase`; `volumeML` is the liquid. Always scale nutrients with `nutrientBase`, never `volumeML` directly.
 - Ranks: `Belt` covers coloured belts and 10 Dan ranks; prestige (opt-in, confirmed) offsets rank goal days via `prestigeBaseGoalDays`. Companion colours and moods come from `CompanionLogic` (pure, tested).
+- Health sync must take its `isSyncing` lock before the first `await` (a race here caused duplicate Health entries); `write` always deletes a drink's samples by sync ID before writing.
+- Reminders: `ReminderPlanner` (pure, tested) picks one random time per interval; `ReminderScheduler` re-plans local notifications on app open and after every save (iOS can't wake the app at reminder time).
 - New SwiftData properties must be optional (or have a default) so existing databases on test phones migrate.
 - With Swift 6 + MainActor default isolation, custom `Shape`s and pure value types need `nonisolated`.
 - Nutrients are stored **per 100 ml**; totals are always computed from the current volume. They are saved as encoded `Data` (see `NutrientStorage`) because SwiftData crashes when reloading a struct whose fields are all nil.
