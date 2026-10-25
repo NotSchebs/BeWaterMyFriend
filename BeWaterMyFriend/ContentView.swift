@@ -34,9 +34,11 @@ struct ContentView: View {
         // While the app is open, check every minute for drinks whose Health delay has passed.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await GoalService.shared.refresh()
             await ReminderScheduler.shared.reschedule(context: context)
             while !Task.isCancelled {
                 await syncHealth()
+                await GoalService.shared.refresh()  // new workouts, a new day (weather is cached)
                 try? await Task.sleep(for: .seconds(60))
             }
         }

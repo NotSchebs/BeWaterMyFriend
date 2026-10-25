@@ -5,9 +5,12 @@ nonisolated struct ReminderSettings: Equatable, Sendable {
     /// Minutes after midnight.
     var startMinutes = 9 * 60
     var endMinutes = 18 * 60
-    /// Roughly how often, in minutes.
+    /// How often, in minutes.
     var intervalMinutes = 60
-    /// Skip today's reminders while the user is ahead of an even pace.
+    /// Smart: a random moment within each interval, and optionally skipped when
+    /// on track. Not smart: exactly every interval, starting at `startMinutes`.
+    var smart = true
+    /// Skip today's reminders while the user is ahead of an even pace (smart only).
     var skipWhenOnTrack = true
 }
 
@@ -23,6 +26,13 @@ nonisolated enum ReminderPlanner {
         let interval = max(settings.intervalMinutes, 5)
         guard settings.endMinutes > settings.startMinutes else { return [] }
         let midnight = calendar.startOfDay(for: day)
+
+        if !settings.smart {
+            // On the dot: 9:00, 10:00, 11:00 … up to and including the end time.
+            return stride(from: settings.startMinutes, through: settings.endMinutes, by: interval)
+                .compactMap { time(minute: Double($0), on: midnight, calendar: calendar) }
+        }
+
         let minGap = Double(interval) / 3
 
         var result: [Date] = []
@@ -58,7 +68,7 @@ nonisolated enum ReminderPlanner {
                             settings: ReminderSettings, calendar: Calendar) -> [Date] {
         times.filter { time in
             guard time > now else { return false }
-            if settings.skipWhenOnTrack && progress >= expectedFraction(at: time, settings: settings, calendar: calendar) {
+            if settings.smart && settings.skipWhenOnTrack && progress >= expectedFraction(at: time, settings: settings, calendar: calendar) {
                 return false
             }
             return true

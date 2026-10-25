@@ -63,6 +63,9 @@ final class ReminderScheduler {
         if defaults.object(forKey: SettingsKey.reminderIntervalMinutes) != nil {
             s.intervalMinutes = defaults.integer(forKey: SettingsKey.reminderIntervalMinutes)
         }
+        if defaults.object(forKey: SettingsKey.reminderSmart) != nil {
+            s.smart = defaults.bool(forKey: SettingsKey.reminderSmart)
+        }
         if defaults.object(forKey: SettingsKey.reminderSkipOnTrack) != nil {
             s.skipWhenOnTrack = defaults.bool(forKey: SettingsKey.reminderSkipOnTrack)
         }

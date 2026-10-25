@@ -49,6 +49,23 @@ final class ReminderPlannerTests: XCTestCase {
                           ReminderPlanner.times(on: day, settings: settings, calendar: zurich, using: &b))
     }
 
+    func testFixedModeIsExactlyOnTheDot() {
+        var rng = SeededRandom(state: 1)
+        let fixed = ReminderSettings(startMinutes: 9 * 60, endMinutes: 18 * 60, intervalMinutes: 60, smart: false)
+        let times = ReminderPlanner.times(on: day, settings: fixed, calendar: zurich, using: &rng)
+        XCTAssertEqual(times.map(minutes), Array(stride(from: 540, through: 1080, by: 60)))
+        let ninety = ReminderSettings(startMinutes: 9 * 60, endMinutes: 18 * 60, intervalMinutes: 90, smart: false)
+        XCTAssertEqual(ReminderPlanner.times(on: day, settings: ninety, calendar: zurich, using: &rng).map(minutes),
+                       [540, 630, 720, 810, 900, 990, 1080])
+    }
+
+    func testFixedModeNeverSkipsEvenWhenOnTrack() {
+        let fixed = ReminderSettings(startMinutes: 9 * 60, endMinutes: 17 * 60, intervalMinutes: 60, smart: false, skipWhenOnTrack: true)
+        let times = [12, 14].map { date(2026, 10, 26, $0, 0) }
+        XCTAssertEqual(ReminderPlanner.todaysTimes(times, now: date(2026, 10, 26, 11, 0), progress: 0.9,
+                                                   settings: fixed, calendar: zurich), times)
+    }
+
     func testEmptyOrInvertedWindowGivesNoReminders() {
         var rng = SeededRandom(state: 1)
         let inverted = ReminderSettings(startMinutes: 18 * 60, endMinutes: 9 * 60)

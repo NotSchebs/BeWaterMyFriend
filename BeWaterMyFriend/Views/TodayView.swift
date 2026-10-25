@@ -175,6 +175,16 @@ struct TodayView: View {
         awardedBeltRaw = Belt.white.rawValue
     }
 
+    /// "Goal includes +1,000 ml for workouts · +500 ml for heat", when there are extras.
+    private var goalExtrasText: String? {
+        guard let b = GoalService.shared.breakdown else { return nil }
+        var parts: [String] = []
+        if b.workoutML > 0 { parts.append("+\(Format.ml(b.workoutML)) for workouts") }
+        if b.heatML > 0 { parts.append("+\(Format.ml(b.heatML)) for heat") }
+        if b.coldML > 0 { parts.append("+\(Format.ml(b.coldML)) for cold") }
+        return parts.isEmpty ? nil : "Goal includes " + parts.joined(separator: " · ")
+    }
+
     /// Scroll target for tapping the ring.
     private static let drinksAnchor = "todaysDrinks"
 
@@ -206,6 +216,12 @@ struct TodayView: View {
 
             if !legend.isEmpty {
                 ColorLegend(totals: legend)
+            }
+
+            if GoalService.isSuggested(), let extras = goalExtrasText {
+                Label(extras, systemImage: "sparkles")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             HStack {

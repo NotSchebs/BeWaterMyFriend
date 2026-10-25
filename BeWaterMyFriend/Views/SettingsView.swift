@@ -13,6 +13,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.reminderEndMinutes) private var reminderEnd = ReminderSettings().endMinutes
     @AppStorage(SettingsKey.reminderIntervalMinutes) private var reminderInterval = ReminderSettings().intervalMinutes
     @AppStorage(SettingsKey.reminderSkipOnTrack) private var reminderSkipOnTrack = ReminderSettings().skipWhenOnTrack
+    @AppStorage(SettingsKey.reminderSmart) private var reminderSmart = ReminderSettings().smart
     @State private var notificationsDenied = false
     @Environment(\.modelContext) private var context
     @Query private var allEntries: [DrinkEntry]
@@ -23,13 +24,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Stepper(value: $goalML, in: 500...6000, step: 250) {
-                        LabeledContent("Daily water goal", value: Format.ml(goalML))
-                    }
-                } footer: {
-                    Text("An estimate, not medical advice. Choose what fits you.")
-                }
+                GoalSection()
 
                 Section {
                     Picker("Day ends at", selection: $dayEndMinutes) {
@@ -94,24 +89,29 @@ struct SettingsView: View {
             if remindersEnabled {
                 DatePicker("From", selection: timeBinding($reminderStart), displayedComponents: .hourAndMinute)
                 DatePicker("Until", selection: timeBinding($reminderEnd), displayedComponents: .hourAndMinute)
-                Picker("About every", selection: $reminderInterval) {
+                Picker(reminderSmart ? "About every" : "Every", selection: $reminderInterval) {
                     ForEach([30, 45, 60, 90, 120, 180], id: \.self) { minutes in
                         Text(minutes < 60 ? "\(minutes) min"
                              : (minutes % 60 == 0 ? "\(minutes / 60) h" : "\(minutes / 60) h \(minutes % 60) min"))
                             .tag(minutes)
                     }
                 }
-                Toggle("Skip when I'm on track", isOn: $reminderSkipOnTrack)
+                Toggle("Smart reminders", isOn: $reminderSmart)
+                if reminderSmart {
+                    Toggle("Skip when I'm on track", isOn: $reminderSkipOnTrack)
+                }
             }
         } header: {
             Text("Reminders")
         } footer: {
-            Text("Reminders come at a random moment within each interval, so they don't feel robotic. Long-press a reminder to log your last drink again, add a new one, or scan. \"Skip when I'm on track\" leaves out today's reminders while you're ahead of an even pace.")
+            Text(reminderSmart
+                 ? "Smart: a reminder at a random moment within each interval, so it doesn't feel robotic. \"Skip when I'm on track\" leaves out reminders while you're ahead of an even pace. Long-press a reminder to log your last drink again, add a new one, or scan."
+                 : "Reminders come exactly every interval, starting at the \"From\" time. Long-press a reminder to log your last drink again, add a new one, or scan.")
         }
         .onChange(of: [reminderStart, reminderEnd, reminderInterval]) {
             Task { await ReminderScheduler.shared.reschedule(context: context) }
         }
-        .onChange(of: reminderSkipOnTrack) {
+        .onChange(of: [reminderSkipOnTrack, reminderSmart]) {
             Task { await ReminderScheduler.shared.reschedule(context: context) }
         }
     }

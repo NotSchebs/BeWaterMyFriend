@@ -260,8 +260,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BeWaterMyFriend uses the camera only while you scan a drink's barcode.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read data from Apple Health, such as workouts, to suggest a water goal.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read your weight and workouts from Apple Health to suggest a water goal.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "BeWaterMyFriend writes the drinks you log to Apple Health: water, caffeine, alcohol and known nutrients.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BeWaterMyFriend uses your approximate location to get today's temperature, so hot or cold days can adjust your suggested water goal.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -294,8 +295,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BeWaterMyFriend uses the camera only while you scan a drink's barcode.";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read data from Apple Health, such as workouts, to suggest a water goal.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read your weight and workouts from Apple Health to suggest a water goal.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "BeWaterMyFriend writes the drinks you log to Apple Health: water, caffeine, alcohol and known nutrients.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "BeWaterMyFriend uses your approximate location to get today's temperature, so hot or cold days can adjust your suggested water goal.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

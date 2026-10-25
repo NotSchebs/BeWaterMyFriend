@@ -19,6 +19,20 @@ enum SettingsKey {
     static let reminderEndMinutes = "reminderEndMinutes"
     static let reminderIntervalMinutes = "reminderIntervalMinutes"
     static let reminderSkipOnTrack = "reminderSkipOnTrack"
+    static let reminderSmart = "reminderSmart"
+    static let goalMode = "goalMode"  // "manual" or "suggested"
+    static let weightFromHealth = "weightFromHealth"
+    static let manualWeightKg = "manualWeightKg"
+    static let goalMlPerKg = "goalMlPerKg"
+    static let useWorkouts = "useWorkouts"
+    static let workoutMlPerHour = "workoutMlPerHour"
+    static let useWeather = "useWeather"
+    static let heatThresholdC = "heatThresholdC"
+    static let heatExtraML = "heatExtraML"
+    static let coldThresholdC = "coldThresholdC"
+    static let coldExtraML = "coldExtraML"
+    static let temperatureUnit = "temperatureUnit"
+    static let goalBreakdown = "goalBreakdown"
 }
 
 /// Light, dark, or follow the system setting.
