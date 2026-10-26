@@ -16,13 +16,22 @@ final class GoalCalculatorTests: XCTestCase {
         let b = GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 60, maxTempC: nil, rules: rules)
         XCTAssertEqual(b.workoutML, 1000)
         XCTAssertEqual(b.goalML, 2950)
-        let half = GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 45, maxTempC: nil, rules: rules)
-        XCTAssertEqual(half.workoutML, 750)
+        XCTAssertEqual(GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 45, maxTempC: nil, rules: rules).workoutML, 750)
     }
 
-    func testHeatFromThreshold() {
-        XCTAssertEqual(GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 27.9, rules: rules).heatML, 0)
-        XCTAssertEqual(GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 28, rules: rules).heatML, 500)
+    func testHeatScalesWithTemperature() {
+        XCTAssertEqual(GoalCalculator.heatExtra(at: 27.9, rules: rules), 0)
+        XCTAssertEqual(GoalCalculator.heatExtra(at: 28, rules: rules), 500)
+        XCTAssertEqual(GoalCalculator.heatExtra(at: 36.5, rules: rules), 750)  // halfway to 45 °C
+        XCTAssertEqual(GoalCalculator.heatExtra(at: 45, rules: rules), 1000)
+        XCTAssertEqual(GoalCalculator.heatExtra(at: 50, rules: rules), 1000, "capped")
+    }
+
+    func testHeatAmountIsStableForTheSameTemperature() {
+        // Recalculated every minute: the same weather must give the same goal.
+        let a = GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 31, rules: rules)
+        let b = GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 31, rules: rules)
+        XCTAssertEqual(a, b)
     }
 
     func testColdFromThreshold() {
@@ -39,9 +48,8 @@ final class GoalCalculatorTests: XCTestCase {
     }
 
     func testEverythingTogether() {
-        // 80 kg, 90 min BJJ, 31 °C: 2,240 + 1,500 + 500 = 4,240 → 4,250
-        let b = GoalCalculator.breakdown(weightKg: 80, workoutMinutes: 90, maxTempC: 31, rules: rules)
-        XCTAssertEqual(b.goalML, 4250)
+        // 80 kg, 90 min BJJ, 28 °C: 2,800 − 560 + 1,500 + 500 = 4,240 → 4,250
+        XCTAssertEqual(GoalCalculator.breakdown(weightKg: 80, workoutMinutes: 90, maxTempC: 28, rules: rules).goalML, 4250)
     }
 
     func testGoalStaysInSensibleRange() {
@@ -55,8 +63,7 @@ final class GoalCalculatorTests: XCTestCase {
         custom.mlPerKg = 30
         custom.foodShare = 0
         custom.heatThresholdC = 25
-        let b = GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 26, rules: custom)
-        XCTAssertEqual(b.goalML, 2600)  // 2,100 + 500 heat
+        XCTAssertEqual(GoalCalculator.breakdown(weightKg: 70, workoutMinutes: 0, maxTempC: 25, rules: custom).goalML, 2600)
     }
 
     func testFahrenheitConversion() {

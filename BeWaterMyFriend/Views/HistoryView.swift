@@ -2,31 +2,39 @@ import SwiftData
 import SwiftUI
 
 struct HistoryView: View {
+    @State private var openedDay: Date?
     @Query(sort: \DrinkEntry.timestamp, order: .reverse) private var entries: [DrinkEntry]
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
+    @State private var month = CalendarGrid.startOfMonth(.now, calendar: .current)
 
     var body: some View {
         NavigationStack {
             let boundary = DayBoundary(dayEndMinutes: dayEndMinutes)
             let days = Summaries.daily(entries: entries, boundary: boundary)
-            let months = Summaries.monthly(days: days, goalML: goalML, calendar: boundary.calendar)
+            let byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
+            let monthSummary = Summaries.monthly(days: days, goalML: goalML, calendar: boundary.calendar)
+                .first { boundary.calendar.isDate($0.month, equalTo: month, toGranularity: .month) }
+            let monthDays = days.filter { boundary.calendar.isDate($0.day, equalTo: month, toGranularity: .month) }
 
-            Group {
-                if days.isEmpty {
-                    ContentUnavailableView("No history yet", systemImage: "calendar",
-                                           description: Text("Drinks you log show up here, grouped by day."))
-                } else {
-                    List {
-                        ForEach(months) { month in
-                            Section(month.month.formatted(.dateTime.month(.wide).year())) {
-                                MonthSummaryRow(month: month)
-                                ForEach(days.filter { boundary.calendar.isDate($0.day, equalTo: month.month, toGranularity: .month) }) { day in
-                                    NavigationLink(value: day.day) {
-                                        DayRow(day: day, goalML: goalML)
-                                    }
-                                }
-                            }
+            List {
+                Section {
+                    CalendarMonthView(month: $month, onOpen: { openedDay = $0 }, summaries: byDay, goalML: goalML,
+                                      today: boundary.logicalDay(for: .now), calendar: boundary.calendar)
+                }
+                if let monthSummary {
+                    Section("This month") {
+                        MonthSummaryRow(month: monthSummary)
+                    }
+                }
+                Section("Days") {
+                    if monthDays.isEmpty {
+                        Text("No drinks logged in \(month.formatted(.dateTime.month(.wide))).")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(monthDays) { day in
+                        NavigationLink(value: day.day) {
+                            DayRow(day: day, goalML: goalML)
                         }
                     }
                 }
@@ -36,7 +44,103 @@ struct HistoryView: View {
             .navigationDestination(for: Date.self) { day in
                 DayDetailView(day: day)
             }
+            .navigationDestination(item: $openedDay) { day in
+                DayDetailView(day: day)
+            }
         }
+    }
+}
+
+/// A month calendar: each day shows a small ring of its progress and a seal
+/// when the goal was reached. Tapping a day opens it.
+struct CalendarMonthView: View {
+    @Binding var month: Date
+    var onOpen: (Date) -> Void = { _ in }
+    var summaries: [Date: DaySummary]
+    var goalML: Double
+    var today: Date
+    var calendar: Calendar
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Button { shift(-1) } label: { Image(systemName: "chevron.left") }
+                    .accessibilityLabel("Previous month")
+                Spacer()
+                Text(month.formatted(.dateTime.month(.wide).year()))
+                    .font(.headline)
+                Spacer()
+                Button { shift(1) } label: { Image(systemName: "chevron.right") }
+                    .disabled(calendar.isDate(month, equalTo: today, toGranularity: .month))
+                    .accessibilityLabel("Next month")
+            }
+            .buttonStyle(.borderless)
+
+            LazyVGrid(columns: columns, spacing: 6) {
+                ForEach(Array(CalendarGrid.weekdaySymbols(calendar: calendar).enumerated()), id: \.offset) { _, symbol in
+                    Text(symbol)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(Array(CalendarGrid.cells(forMonthContaining: month, calendar: calendar).enumerated()), id: \.offset) { _, day in
+                    if let day {
+                        dayCell(day)
+                    } else {
+                        Color.clear.frame(height: 44)
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .gesture(DragGesture(minimumDistance: 30).onEnded { value in
+            if value.translation.width < -40 { shift(1) } else if value.translation.width > 40 { shift(-1) }
+        })
+    }
+
+    @ViewBuilder
+    private func dayCell(_ day: Date) -> some View {
+        let summary = summaries[day]
+        let isToday = calendar.isDate(day, inSameDayAs: today)
+        let isFuture = day > today
+        let label = VStack(spacing: 2) {
+            ZStack {
+                if let summary {
+                    ProgressRing(progress: summary.progress(goalML: goalML), lineWidth: 3)
+                    if summary.goalReached(goalML: goalML) {
+                        Circle().fill(Color.accentColor.opacity(0.15))
+                    }
+                }
+                Text("\(calendar.component(.day, from: day))")
+                    .font(.caption.weight(isToday ? .bold : .regular))
+                    .foregroundStyle(isFuture ? Color.secondary.opacity(0.5) : (isToday ? Color.accentColor : Color.primary))
+            }
+            .frame(width: 32, height: 32)
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(Dojo.seal)
+                .opacity(summary?.goalReached(goalML: goalML) == true ? 1 : 0)
+        }
+        .frame(height: 44)
+        .frame(maxWidth: .infinity)
+        .contentShape(.rect)
+
+        if summary != nil {
+            // A plain button, not a NavigationLink: in a List, links add a chevron per cell.
+            Button { onOpen(day) } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), \(Format.percent(summary!.progress(goalML: goalML)))")
+        } else {
+            label
+                .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), no drinks")
+        }
+    }
+
+    private func shift(_ months: Int) {
+        guard let next = calendar.date(byAdding: .month, value: months, to: month) else { return }
+        if next > today && !calendar.isDate(next, equalTo: today, toGranularity: .month) { return }
+        withAnimation(.easeInOut(duration: 0.2)) { month = CalendarGrid.startOfMonth(next, calendar: calendar) }
     }
 }
 

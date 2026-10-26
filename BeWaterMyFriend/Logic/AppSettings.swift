@@ -29,6 +29,7 @@ enum SettingsKey {
     static let useWeather = "useWeather"
     static let heatThresholdC = "heatThresholdC"
     static let heatExtraML = "heatExtraML"
+    static let heatMaxExtraML = "heatMaxExtraML"
     static let coldThresholdC = "coldThresholdC"
     static let coldExtraML = "coldExtraML"
     static let temperatureUnit = "temperatureUnit"

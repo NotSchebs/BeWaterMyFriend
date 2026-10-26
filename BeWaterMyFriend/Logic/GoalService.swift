@@ -33,6 +33,7 @@ final class GoalService {
         r.workoutMLPerHour = value(SettingsKey.workoutMlPerHour) ?? r.workoutMLPerHour
         r.heatThresholdC = value(SettingsKey.heatThresholdC) ?? r.heatThresholdC
         r.heatExtraML = value(SettingsKey.heatExtraML) ?? r.heatExtraML
+        r.heatMaxExtraML = value(SettingsKey.heatMaxExtraML) ?? r.heatMaxExtraML
         r.coldThresholdC = value(SettingsKey.coldThresholdC) ?? r.coldThresholdC
         r.coldExtraML = value(SettingsKey.coldExtraML) ?? r.coldExtraML
         return r

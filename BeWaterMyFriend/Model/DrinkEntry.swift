@@ -130,6 +130,14 @@ final class DrinkPreset {
     /// Barcode of a scanned product. Scanning it again uses this preset,
     /// including the user's corrections, instead of the online data.
     var barcode: String?
+    /// `false` = saved (findable in search, remembered for its barcode) but not
+    /// shown in the Quick log. `nil` (older presets) counts as shown.
+    var inQuickLog: Bool?
+
+    var isInQuickLog: Bool {
+        get { inQuickLog ?? true }
+        set { inQuickLog = newValue }
+    }
 
     init(
         name: String,

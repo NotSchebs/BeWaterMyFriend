@@ -98,6 +98,7 @@ struct GoalRulesView: View {
     @AppStorage(SettingsKey.useWeather) private var useWeather = false
     @AppStorage(SettingsKey.heatThresholdC) private var heatThreshold = GoalRules().heatThresholdC
     @AppStorage(SettingsKey.heatExtraML) private var heatExtra = GoalRules().heatExtraML
+    @AppStorage(SettingsKey.heatMaxExtraML) private var heatMaxExtra = GoalRules().heatMaxExtraML
     @AppStorage(SettingsKey.coldThresholdC) private var coldThreshold = GoalRules().coldThresholdC
     @AppStorage(SettingsKey.coldExtraML) private var coldExtra = GoalRules().coldExtraML
     @AppStorage(SettingsKey.temperatureUnit) private var unitRaw = TemperatureUnit.celsius.rawValue
@@ -153,8 +154,11 @@ struct GoalRulesView: View {
                     Stepper(value: temperature($heatThreshold), in: unit.fromCelsius(20)...unit.fromCelsius(40), step: 1) {
                         LabeledContent("Hot from", value: unit.format(heatThreshold))
                     }
-                    Stepper(value: $heatExtra, in: 0...1500, step: 250) {
-                        LabeledContent("Extra on hot days", value: Format.ml(heatExtra))
+                    Stepper(value: $heatExtra, in: 0...1500, step: 50) {
+                        LabeledContent("Extra from \(unit.format(heatThreshold))", value: Format.ml(heatExtra))
+                    }
+                    Stepper(value: $heatMaxExtra, in: 0...2000, step: 50) {
+                        LabeledContent("Extra at \(unit.format(GoalRules().heatMaxC))+", value: Format.ml(heatMaxExtra))
                     }
                     Stepper(value: temperature($coldThreshold), in: unit.fromCelsius(-15)...unit.fromCelsius(10), step: 1) {
                         LabeledContent("Cold up to", value: unit.format(coldThreshold))
@@ -166,12 +170,13 @@ struct GoalRulesView: View {
             } header: {
                 Text("Weather")
             } footer: {
-                Text("Uses today's highest temperature where you are (approximate location, from Open-Meteo). Cold also counts: the body makes more urine and you feel less thirsty.")
+                Text("Uses today's highest temperature where you are (approximate location, from Open-Meteo). On hot days the extra rises evenly with the temperature, up to \(unit.format(GoalRules().heatMaxC)). Cold also counts: the body makes more urine and you feel less thirsty.")
             }
 
             Section("Sources") {
-                Text("Mallett LJ et al. (2021). Total water intake by kilogram of body weight. Nutrition & Dietetics 78(5):496–505. Median for adults: 35.5 ml/kg (food and drinks). This is what people drink, not a minimum requirement.")
                 Text("EFSA Panel on Dietetic Products, Nutrition and Allergies (2010). Scientific Opinion on Dietary Reference Values for water. EFSA Journal 8(3):1459. About 20–30 % of water comes from food.")
+                Text("Mallett LJ et al. (2021). Total water intake by kilogram of body weight. Nutrition & Dietetics 78(5):496–505. Median for adults: 35.5 ml/kg (food and drinks). This is what people drink, not a minimum requirement.")
+                Text("Orysiak J et al. (2025). Hydration of Workers in Thermal Environments—Practical Recommendation. Nutrients 18(1):64. In heat: 150–250 ml every 15–20 minutes while working (NIOSH/OSHA); drinks needed from about 25 °C outdoors or below 10 °C.")
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -183,7 +188,7 @@ struct GoalRulesView: View {
             locationDenied = on && WeatherService.shared.isDenied
             Task { await GoalService.shared.refresh(refreshWeather: true) }
         }
-        .onChange(of: [mlPerKg, manualWeight, workoutMlPerHour, heatThreshold, heatExtra, coldThreshold, coldExtra]) {
+        .onChange(of: [mlPerKg, manualWeight, workoutMlPerHour, heatThreshold, heatExtra, heatMaxExtra, coldThreshold, coldExtra]) {
             Task { await GoalService.shared.refresh() }
         }
         .onChange(of: [weightFromHealth, useWorkouts]) {

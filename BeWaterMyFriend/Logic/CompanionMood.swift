@@ -54,7 +54,7 @@ extension DrinkCategory {
         case .juice: .juice
         case .softDrink: .soda
         case .energyDrink: .energy
-        case .milk, .proteinShake: .milk
+        case .milk, .proteinShake, .proteinDrink: .milk
         case .electrolytes, .sportsDrink: .electrolytes
         case .beer: .beer
         case .wine: .wine
@@ -90,7 +90,7 @@ enum CompanionLogic {
         let age = now.timeIntervalSince(last.timestamp)
         if last.alcoholGrams > 0 && age <= alcoholWindow { return .tipsy }
         if last.caffeineMg > 0 && age <= caffeineWindow { return .hyper }
-        if last.category == .proteinShake && age <= powderWindow { return .strong }
+        if (last.category == .proteinShake || last.category == .proteinDrink) && age <= powderWindow { return .strong }
         if last.category == .electrolytes && age <= powderWindow { return .charged }
         return .calm
     }

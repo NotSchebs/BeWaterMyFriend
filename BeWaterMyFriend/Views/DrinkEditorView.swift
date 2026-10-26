@@ -9,6 +9,8 @@ enum EditorMode: Identifiable {
     case editPreset(DrinkPreset)
     /// A new entry pre-filled from a barcode scan, shown for review.
     case scanned(DrinkDraft)
+    /// A new entry pre-filled from one of the user's drinks (search).
+    case prefilled(DrinkDraft)
 
     var id: String {
         switch self {
@@ -17,6 +19,7 @@ enum EditorMode: Identifiable {
         case .newPreset: "newPreset"
         case .editPreset(let preset): "preset-\(preset.persistentModelID.hashValue)"
         case .scanned(let draft): "scan-\(draft.barcode ?? "")"
+        case .prefilled(let draft): "prefilled-\(draft.name)-\(draft.volumeML)"
         }
     }
 
@@ -29,7 +32,7 @@ enum EditorMode: Identifiable {
 
     var isNew: Bool {
         switch self {
-        case .newEntry, .newPreset, .scanned: true
+        case .newEntry, .newPreset, .scanned, .prefilled: true
         default: false
         }
     }
@@ -44,6 +47,9 @@ struct DrinkEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: DrinkDraft
     @State private var confirmDelete = false
+    @State private var askQuickLog = false
+    @Query private var presets: [DrinkPreset]
+    @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
 
     init(mode: EditorMode) {
         self.mode = mode
@@ -51,7 +57,7 @@ struct DrinkEditorView: View {
         case .newEntry, .newPreset: _draft = State(initialValue: DrinkDraft())
         case .editEntry(let entry): _draft = State(initialValue: DrinkDraft(entry: entry))
         case .editPreset(let preset): _draft = State(initialValue: DrinkDraft(preset: preset))
-        case .scanned(let scanned): _draft = State(initialValue: scanned)
+        case .scanned(let scanned), .prefilled(let scanned): _draft = State(initialValue: scanned)
         }
     }
 
@@ -97,10 +103,7 @@ struct DrinkEditorView: View {
                     if mode.isPreset {
                         Toggle("Favourite", isOn: $draft.isFavourite)
                     } else {
-                        DatePicker("Time", selection: $draft.timestamp, in: ...Date.now)
-                    }
-                    if case .scanned = mode {
-                        Toggle("Remember as preset", isOn: $draft.saveAsPreset)
+                        DatePicker("Time", selection: $draft.timestamp, in: timeRange)
                     }
                 }
 
@@ -149,9 +152,18 @@ struct DrinkEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("Save") { trySave() }
                         .disabled(!draft.isValid)
                 }
+            }
+            .alert(QuickLogRules.isFull(presets) ? "Save \(trimmedName) for later?" : "Add \(trimmedName) to Quick log?",
+                   isPresented: $askQuickLog) {
+                Button(QuickLogRules.isFull(presets) ? "Save" : "Add to Quick log") { save(addToQuickLog: true) }
+                Button("Not now", role: .cancel) { save(addToQuickLog: false) }
+            } message: {
+                Text(QuickLogRules.isFull(presets)
+                     ? "Your Quick log is full (\(QuickLogRules.maxItems) drinks). It will be in search and under Settings › Presets, where you can swap it into the Quick log."
+                     : "Then it's one tap next time.")
             }
             .confirmationDialog("Delete this \(mode.isPreset ? "preset" : "drink")?",
                                 isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -207,26 +219,59 @@ struct DrinkEditorView: View {
         switch mode {
         case .newEntry: "New drink"
         case .scanned: "Scanned drink"
+        case .prefilled: "New drink"
         case .editEntry: "Edit drink"
         case .newPreset: "New preset"
         case .editPreset: "Edit preset"
         }
     }
 
-    private func save() {
+    private var trimmedName: String { draft.name.trimmingCharacters(in: .whitespaces) }
+
+    /// Drinks can be logged for today and the two days before, not earlier.
+    private var timeRange: ClosedRange<Date> {
+        let existing: Date? = if case .editEntry(let entry) = mode { entry.timestamp } else { nil }
+        return LogTimeLimit.range(now: .now, boundary: DayBoundary(dayEndMinutes: dayEndMinutes), existing: existing)
+    }
+
+    /// New drinks that aren't saved yet: ask whether to add them to the Quick log.
+    private func trySave() {
+        let isNewDrink: Bool = switch mode {
+        case .newEntry, .scanned, .prefilled: true
+        default: false
+        }
+        let known = QuickLogRules.existingPreset(barcode: draft.barcode, name: draft.name,
+                                                 category: draft.category, in: presets)
+        if isNewDrink && known == nil {
+            askQuickLog = true
+        } else {
+            save(addToQuickLog: false)
+        }
+    }
+
+    private func save(addToQuickLog: Bool) {
+        let full = QuickLogRules.isFull(presets)
         switch mode {
-        case .newEntry:
+        case .newEntry, .prefilled:
             context.insert(draft.makeEntry())
+            if addToQuickLog {
+                let preset = draft.makePreset(sortOrder: presets.count)
+                preset.isInQuickLog = !full
+                context.insert(preset)
+            }
         case .editEntry(let entry):
             draft.apply(to: entry)
         case .newPreset:
-            let count = (try? context.fetchCount(FetchDescriptor<DrinkPreset>())) ?? 0
-            context.insert(draft.makePreset(sortOrder: count))
+            let preset = draft.makePreset(sortOrder: presets.count)
+            preset.isInQuickLog = !full
+            context.insert(preset)
         case .editPreset(let preset):
             draft.apply(to: preset)
         case .scanned:
             context.insert(draft.makeEntry())
-            if draft.saveAsPreset { rememberScannedPreset() }
+            // Always remember scans (corrections are reused for the barcode);
+            // only shown in the Quick log if the user said so.
+            rememberScannedPreset(showInQuickLog: addToQuickLog && !full)
         }
         try? context.save()
         dismiss()
@@ -234,7 +279,7 @@ struct DrinkEditorView: View {
 
     /// Updates the preset with this barcode, or creates one, so the user's
     /// corrections are used the next time this product is scanned.
-    private func rememberScannedPreset() {
+    private func rememberScannedPreset(showInQuickLog: Bool) {
         guard let barcode = draft.barcode else { return }
         let code: String? = barcode
         let existing = try? context.fetch(FetchDescriptor<DrinkPreset>(predicate: #Predicate { $0.barcode == code })).first
@@ -243,8 +288,9 @@ struct DrinkEditorView: View {
             updated.isFavourite = existing.isFavourite
             updated.apply(to: existing)
         } else {
-            let count = (try? context.fetchCount(FetchDescriptor<DrinkPreset>())) ?? 0
-            context.insert(draft.makePreset(sortOrder: count))
+            let preset = draft.makePreset(sortOrder: presets.count)
+            preset.isInQuickLog = showInQuickLog
+            context.insert(preset)
         }
     }
 

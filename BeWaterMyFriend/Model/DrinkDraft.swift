@@ -17,8 +17,6 @@ struct DrinkDraft {
     var isFavourite = false
     var source: EntrySource = .manual
     var barcode: String?
-    /// For scans: also keep it as a preset so corrections are reused next time.
-    var saveAsPreset = false
     /// For scans: what the database said, shown as a hint while reviewing.
     var scanNote: String?
 
@@ -49,10 +47,12 @@ struct DrinkDraft {
         nutrientsPer100ml = product.nutrientsPer100ml
         source = .scan
         barcode = product.barcode
-        saveAsPreset = true
         var notes = ["From Open Food Facts. Check the values, especially caffeine, before saving."]
         if let package = product.packageVolumeML, package != product.suggestedVolumeML {
             notes.append("Package: \(Int(package)) ml.")
+        }
+        if product.nutrientsPer100ml.caffeineMg == nil, product.category.oftenHasCaffeine {
+            notes.append("Caffeine isn't listed for this product. If it has caffeine, add it under Caffeine (it's on the label); it will be remembered for this barcode.")
         }
         if product.powderGrams != nil {
             notes.append("Powder: values are per 100 g of powder. Set your scoop size and how much liquid you mixed it with.")
@@ -66,7 +66,6 @@ struct DrinkDraft {
     init(scannedPreset preset: DrinkPreset) {
         self.init(preset: preset)
         source = .scan
-        saveAsPreset = true  // corrections made now update the saved version
         scanNote = "Your saved version of this product."
     }
 
@@ -75,7 +74,6 @@ struct DrinkDraft {
         name = ""
         source = .scan
         self.barcode = barcode
-        saveAsPreset = true
         scanNote = "Not found in Open Food Facts. Enter it once and it will be remembered for this barcode."
     }
 

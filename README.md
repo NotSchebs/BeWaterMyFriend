@@ -9,14 +9,15 @@ Mini-Challenge *KI-gestütztes Programmieren (kip)*, HS26 — Sébastien André 
 ## Features
 
 **Logging**
-- One-tap presets with favourites; drinks can be added, edited and deleted
-- 16 drink types with a free-text name, amount, time and optional alcohol %
+- Quick log with up to 12 drinks (favourites first), a checkmark and Undo after each tap; search past drinks with +; new drinks ask before joining the Quick log
+- Drinks can be added for today and the two days before
+- 17 drink types (incl. ready-to-drink protein) with a free-text name, amount, time and optional alcohol %
 - All nutrients that Apple Health supports (38), stored per 100 ml and scaled to the amount
 - Powder drinks (electrolytes, protein): scoop size in grams plus the liquid it was mixed with
 - Barcode scanning (camera, or type the number) with data from [Open Food Facts](https://world.openfoodfacts.org); every scan is reviewed before saving, and corrections are remembered for that barcode
 
 **Goal and history**
-- Daily goal set by hand, or suggested: body weight × 35 ml/kg minus about 20 % from food, plus workouts (default +1 l per hour) and hot (≥ 28 °C) or cold (≤ 3 °C) days; weight and workouts from Apple Health, temperature from [Open-Meteo](https://open-meteo.com); every number adjustable and the calculation shown
+- Daily goal set by hand, or suggested: body weight × 35 ml/kg minus about 20 % from food, plus workouts (default +1 l per hour), hot days (500 ml from 28 °C, rising to 1 l at 45 °C) and cold days (250 ml up to 3 °C); weight and workouts from Apple Health, temperature from [Open-Meteo](https://open-meteo.com); every number adjustable and the calculation shown
 - Custom end of day (e.g. 3 am for late nights)
 - Each drink counts toward the goal with a percentage: automatic (non-alcohol share, so a 5 % beer counts 95 %) or set by hand
 - Separate totals for water, caffeine, alcohol (standard drinks) and nutrients
@@ -36,7 +37,7 @@ Mini-Challenge *KI-gestütztes Programmieren (kip)*, HS26 — Sébastien André 
 - Smart (a random moment within each interval, optionally skipped when on track) or fixed (exactly every interval); default every hour, 9:00–18:00
 - Long-press a reminder to log the last drink again, add a new one, or scan
 
-**Other:** System, Light or Dark appearance.
+**Other:** System, Light or Dark appearance; backup export/import (JSON) for a new phone; FAQ.
 
 ## Privacy
 
@@ -51,7 +52,7 @@ No account and no backend. Data stays on the phone and, if allowed, in Apple Hea
 | `BeWaterMyFriend/Health` | HealthKit: writing drinks, reading weight and workouts |
 | `BeWaterMyFriend/Notifications` | Reminder scheduling and actions |
 | `BeWaterMyFriend/Views` | SwiftUI screens and the companion |
-| `BeWaterMyFriendTests` | XCTest unit tests (110), including daylight-saving days and real Open Food Facts responses |
+| `BeWaterMyFriendTests` | XCTest unit tests (123), including daylight-saving days and real Open Food Facts responses |
 | `Design` | App icon and icon concepts, with the scripts that generate them |
 
 ## Requirements
@@ -73,6 +74,7 @@ Camera scanning, Health permissions and reminders work best on a real device.
 
 - Mallett LJ et al. (2021). Total water intake by kilogram of body weight: Analysis of the Australian 2011 to 2013 National Nutrition and Physical Activity Survey. *Nutrition & Dietetics* 78(5):496–505. [doi:10.1111/1747-0080.12697](https://doi.org/10.1111/1747-0080.12697)
 - EFSA Panel on Dietetic Products, Nutrition and Allergies (2010). Scientific Opinion on Dietary Reference Values for water. *EFSA Journal* 8(3):1459.
+- Orysiak J, Młynarczyk M, Bugajska J, Łastowiecka-Moras E (2025). Hydration of Workers in Thermal Environments—Practical Recommendation. *Nutrients* 18(1):64. [doi:10.3390/nu18010064](https://doi.org/10.3390/nu18010064)
 
 ## Credits
 

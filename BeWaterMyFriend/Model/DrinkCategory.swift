@@ -17,6 +17,8 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
     case electrolytes
     /// Powder mixed into water or milk.
     case proteinShake
+    /// Ready-to-drink protein shake (no powder to measure).
+    case proteinDrink
     case beer
     case wine
     case spirits
@@ -37,7 +39,8 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
         case .milk: "Milk"
         case .sportsDrink: "Sports drink"
         case .electrolytes: "Electrolytes"
-        case .proteinShake: "Protein shake"
+        case .proteinShake: "Protein shake (powder)"
+        case .proteinDrink: "Protein drink"
         case .beer: "Beer"
         case .wine: "Wine"
         case .spirits: "Spirits"
@@ -55,12 +58,17 @@ nonisolated enum DrinkCategory: String, Codable, CaseIterable, Identifiable, Sen
         case .softDrink, .energyDrink, .sportsDrink: "takeoutbag.and.cup.and.straw.fill"
         case .milk: "waterbottle.fill"
         case .electrolytes: "bolt.fill"
-        case .proteinShake: "dumbbell.fill"
+        case .proteinShake, .proteinDrink: "dumbbell.fill"
         case .beer: "mug.fill"
         case .wine, .cocktail: "wineglass.fill"
         case .spirits: "flame.fill"
         case .other: "circle.dotted"
         }
+    }
+
+    /// Drinks where a missing caffeine value is worth pointing out after a scan.
+    var oftenHasCaffeine: Bool {
+        [.coffee, .tea, .softDrink, .energyDrink].contains(self)
     }
 
     /// Made from a scoop of powder: nutrients are per 100 g of powder.

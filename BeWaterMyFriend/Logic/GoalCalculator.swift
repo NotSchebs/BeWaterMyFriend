@@ -10,9 +10,12 @@ nonisolated struct GoalRules: Equatable, Sendable {
     var foodShare = 0.2
     /// Extra per hour of workout (common sweat losses: 0.5–2 l per hour).
     var workoutMLPerHour = 1000.0
-    /// Today's maximum temperature at or above this adds `heatExtraML`.
+    /// From this maximum temperature, hot days add `heatExtraML`…
     var heatThresholdC = 28.0
     var heatExtraML = 500.0
+    /// …rising evenly to `heatMaxExtraML` at `heatMaxC` and above.
+    var heatMaxC = 45.0
+    var heatMaxExtraML = 1000.0
     /// Today's maximum temperature at or below this adds `coldExtraML`
     /// (cold makes you pee more and feel less thirsty).
     var coldThresholdC = 3.0
@@ -50,14 +53,23 @@ nonisolated enum GoalCalculator {
         let workout = max(workoutMinutes, 0) / 60 * rules.workoutMLPerHour
         var heat = 0.0, cold = 0.0
         if let temp = maxTempC {
-            if temp >= rules.heatThresholdC { heat = rules.heatExtraML }
+            heat = heatExtra(at: temp, rules: rules)
             if temp <= rules.coldThresholdC { cold = rules.coldExtraML }
         }
         let raw = total - food + workout + heat + cold
         let goal = min(max((raw / 50).rounded() * 50, minimumGoalML), maximumGoalML)
-        return GoalBreakdown(weightKg: weight, totalWaterML: total, fromFoodML: food,
-                             workoutMinutes: max(workoutMinutes, 0), workoutML: workout,
-                             maxTempC: maxTempC, heatML: heat, coldML: cold, goalML: goal)
+        return GoalBreakdown(weightKg: weight, totalWaterML: total, fromFoodML: food, workoutMinutes: max(workoutMinutes, 0),
+                             workoutML: workout, maxTempC: maxTempC, heatML: heat, coldML: cold, goalML: goal)
+    }
+
+    /// 0 below the threshold; from `heatExtraML` at the threshold rising evenly
+    /// to `heatMaxExtraML` at `heatMaxC`; capped there. Rounded to 50 ml.
+    static func heatExtra(at temp: Double, rules: GoalRules) -> Double {
+        guard temp >= rules.heatThresholdC else { return 0 }
+        let span = rules.heatMaxC - rules.heatThresholdC
+        let share = span > 0 ? min((temp - rules.heatThresholdC) / span, 1) : 1
+        let extra = rules.heatExtraML + share * max(rules.heatMaxExtraML - rules.heatExtraML, 0)
+        return (extra / 50).rounded() * 50
     }
 }
 

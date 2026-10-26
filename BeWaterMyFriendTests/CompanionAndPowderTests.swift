@@ -175,6 +175,23 @@ final class PowderTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(entry.amount(of: .magnesium)), 30, accuracy: 0.0001)
     }
 
+    func testReadyToDrinkProteinShakeIsAProteinDrink() throws {
+        let json = #"""
+        {"code":"7610000000002","status":1,"product":{"product_name":"High Protein Drink Vanilla","quantity":"330 ml",
+        "product_quantity":330,"product_quantity_unit":"ml","nutrition_data_per":"100ml","categories_tags":["en:dairies","en:milks"],
+        "nutriments":{"proteins_100g":7.5}}}
+        """#
+        let product = try XCTUnwrap(OpenFoodFacts.parse(Data(json.utf8), barcode: "7610000000002"))
+        XCTAssertEqual(product.category, .proteinDrink)
+        XCTAssertNil(product.powderGrams, "no scoop for ready-to-drink")
+        XCTAssertEqual(product.suggestedVolumeML, 330)
+    }
+
+    func testMissingCaffeineIsPointedOutForCola() throws {
+        let product = try XCTUnwrap(OpenFoodFacts.parse(Data(OFFFixtures.cocaCola.utf8), barcode: "5449000000996"))
+        XCTAssertTrue(DrinkDraft(scanned: product).scanNote?.contains("Caffeine isn't listed") ?? false)
+    }
+
     func testPowderDetection() {
         XCTAssertEqual(OpenFoodFacts.powderCategory(name: "Whey Protein Vanilla", tags: [], unit: "g"), .proteinShake)
         XCTAssertEqual(OpenFoodFacts.powderCategory(name: "Iso Drink", tags: ["en:electrolyte-powders"], unit: nil), .electrolytes)

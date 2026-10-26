@@ -56,11 +56,18 @@ struct SettingsView: View {
                     }
                 }
 
+                BackupSection()
+
                 Section("About") {
+                    NavigationLink("FAQ") { FAQView() }
                     Text("BeWaterMyFriend tracks water, caffeine, alcohol and nutrients. All values are estimates, not medical advice.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
+
+                #if DEBUG
+                DojoTestSection()
+                #endif
             }
             .dojoBackground()
             .sensoryFeedback(.success, trigger: health.manualSyncCount)
@@ -148,20 +155,23 @@ struct SettingsView: View {
                             Text(delay.label).tag(delay.rawValue)
                         }
                     }
-                    pendingStatus
-                    Button {
-                        writeNow()
-                    } label: {
-                        HStack {
-                            Label(isWritingNow ? "Writing to Apple Health…" : "Write pending drinks now",
-                                  systemImage: "arrow.up.heart")
-                            Spacer()
-                            if isWritingNow {
-                                ProgressView()
-                            }
+                    // Status with a refresh button: writes waiting drinks right away.
+                    HStack {
+                        pendingStatus
+                        Spacer()
+                        Button {
+                            writeNow()
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.body.weight(.semibold))
+                                .rotationEffect(.degrees(isWritingNow ? 360 : 0))
+                                .animation(isWritingNow ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default,
+                                           value: isWritingNow)
                         }
+                        .buttonStyle(.borderless)
+                        .disabled(isWritingNow)
+                        .accessibilityLabel("Write waiting drinks to Apple Health now")
                     }
-                    .disabled(isWritingNow)
                     if showResult, let result = health.lastResult {
                         Label(result, systemImage: "checkmark.circle.fill")
                             .font(.footnote)
@@ -251,6 +261,7 @@ struct PresetListView: View {
 
     var body: some View {
         List {
+            Section {
             ForEach(presets) { preset in
                 HStack {
                     Button {
@@ -271,6 +282,17 @@ struct PresetListView: View {
                         .contentShape(.rect)
                     }
                     .tint(.primary)
+
+                    Button {
+                        preset.isInQuickLog.toggle()
+                        try? context.save()
+                    } label: {
+                        Image(systemName: preset.isInQuickLog ? "square.grid.2x2.fill" : "square.grid.2x2")
+                            .foregroundStyle(preset.isInQuickLog ? Color.accentColor : .secondary)
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(!preset.isInQuickLog && QuickLogRules.isFull(presets))
+                    .accessibilityLabel(preset.isInQuickLog ? "Remove from Quick log" : "Add to Quick log")
 
                     Button {
                         preset.isFavourite.toggle()
@@ -294,6 +316,11 @@ struct PresetListView: View {
                     preset.sortOrder = index
                 }
                 try? context.save()
+            }
+            } header: {
+                Text("Quick log: \(presets.filter(\.isInQuickLog).count) of \(QuickLogRules.maxItems)")
+            } footer: {
+                Text("▦ shows a drink in the Quick log (at most \(QuickLogRules.maxItems)); ★ puts it first. Drinks not in the Quick log are still found with search when you tap +.")
             }
         }
         .dojoBackground()

@@ -11,7 +11,7 @@ struct ContentView: View {
     @State private var selectedTab = AppTab.today
     private var router = AppRouter.shared
 
-    enum AppTab: Hashable { case today, history, settings }
+    enum AppTab: Hashable { case today, history, stats, settings }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -21,14 +21,39 @@ struct ContentView: View {
             Tab("History", systemImage: "calendar", value: AppTab.history) {
                 HistoryView()
             }
+            Tab("Stats", systemImage: "chart.bar.fill", value: AppTab.stats) {
+                StatsView()
+            }
             Tab("Settings", systemImage: "gearshape", value: AppTab.settings) {
                 SettingsView()
+            }
+        }
+        // Links: bewatermyfriend://new and bewatermyfriend://scan (same path as the reminder buttons).
+        .onOpenURL { url in
+            switch url.host() {
+            case "new": router.pendingAction = .newDrink
+            case "scan": router.pendingAction = .scan
+            default: break
             }
         }
         // A reminder's "New drink" or "Scan" opens the Today tab, which shows the screen.
         .onChange(of: router.pendingAction, initial: true) { _, action in
             if action != nil { selectedTab = .today }
         }
+        // "Logged … · Undo" pinned to the bottom of the screen, whatever is scrolled
+        // where. It sits above the whole TabView, so no list can catch its taps.
+        .overlay(alignment: .bottom) {
+            if let entry = router.lastLogged {
+                LoggedToast(entry: entry) {
+                    EntryActions.delete([entry], in: context)
+                    withAnimation { router.lastLogged = nil }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 74)  // just above the tab bar
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.35), value: router.lastLogged?.persistentModelID)
         .fontDesign(.rounded)
         .preferredColorScheme(colorScheme)
         // While the app is open, check every minute for drinks whose Health delay has passed.

@@ -19,7 +19,11 @@ struct TodayView: View {
 
     @State private var editor: EditorMode?
     @State private var showScanner = false
+    @State private var showAddDrink = false
+    @State private var showAlcoholInfo = false
+    @State private var flashedPreset: PersistentIdentifier?
     private var router = AppRouter.shared
+    @Environment(\.scenePhase) private var scenePhase
     @State private var loggedCount = 0
     @State private var showDojo = false
     @State private var earnedBelt: Belt?
@@ -34,7 +38,7 @@ struct TodayView: View {
             .navigationTitle("Today")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("Add drink", systemImage: "plus") { editor = .newEntry }
+                    Button("Add drink", systemImage: "plus") { showAddDrink = true }
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Scan", systemImage: "barcode.viewfinder") { showScanner = true }
@@ -42,6 +46,13 @@ struct TodayView: View {
             }
             .sheet(item: $editor) { mode in
                 DrinkEditorView(mode: mode)
+            }
+            .sheet(isPresented: $showAddDrink) {
+                AddDrinkView(
+                    onPick: { draft in present { editor = .prefilled(draft) } },
+                    onNew: { present { editor = .newEntry } },
+                    onScan: { present { showScanner = true } }
+                )
             }
             .sheet(isPresented: $showScanner) {
                 ScanView { draft in
@@ -56,15 +67,9 @@ struct TodayView: View {
                 BeltEarnedView(belt: belt)
             }
             .sensoryFeedback(.success, trigger: loggedCount)
-            // Opened from a reminder's "New drink" or "Scan" button.
-            .onChange(of: router.pendingAction, initial: true) { _, action in
-                switch action {
-                case .newDrink: editor = .newEntry
-                case .scan: showScanner = true
-                case nil: return
-                }
-                router.pendingAction = nil
-            }
+            // Opened from a reminder's "New drink" or "Scan" button (or a link).
+            .onChange(of: router.pendingAction, initial: true) { handlePendingAction() }
+            .onChange(of: scenePhase) { handlePendingAction() }
         }
     }
 
@@ -108,7 +113,7 @@ struct TodayView: View {
             )
 
             Section {
-                QuickLogGrid(presets: sortedPresets) { preset in
+                QuickLogGrid(presets: sortedPresets, flashed: flashedPreset) { preset in
                     log(preset)
                 }
                 .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
@@ -185,6 +190,35 @@ struct TodayView: View {
         return parts.isEmpty ? nil : "Goal includes " + parts.joined(separator: " · ")
     }
 
+    /// iOS drops sheets that are presented while the app is still coming to
+    /// the foreground. So: wait until the app is active, close whatever sheet
+    /// is open, then show the requested screen.
+    private func handlePendingAction() {
+        guard let action = router.pendingAction, scenePhase == .active else { return }
+        router.pendingAction = nil
+        let wasShowingSheet = editor != nil || showScanner || showAddDrink || showDojo
+        editor = nil
+        showScanner = false
+        showAddDrink = false
+        showDojo = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(wasShowingSheet ? 600 : 300))
+            switch action {
+            case .newDrink: editor = .newEntry
+            case .scan: showScanner = true
+            }
+        }
+    }
+
+    /// Opens the next sheet once the current one has gone (iOS ignores a
+    /// presentation while another sheet is still closing).
+    private func present(_ action: @escaping () -> Void) {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            action()
+        }
+    }
+
     /// Scroll target for tapping the ring.
     private static let drinksAnchor = "todaysDrinks"
 
@@ -226,8 +260,16 @@ struct TodayView: View {
 
             HStack {
                 StatTile(title: "Caffeine", value: Format.mg(summary.caffeineMg), symbol: "bolt.fill")
-                StatTile(title: "Alcohol", value: "\(Format.standardDrinks(summary.standardDrinks)) std",
-                         symbol: "wineglass.fill")
+                Button { showAlcoholInfo = true } label: {
+                    StatTile(title: "Std. drinks ⓘ", value: Format.standardDrinks(summary.standardDrinks),
+                             symbol: "wineglass.fill")
+                }
+                .buttonStyle(.plain)
+                .alert("Standard drinks", isPresented: $showAlcoholInfo) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(FAQ.standardDrink)
+                }
                 StatTile(title: "All fluids", value: Format.ml(summary.totalFluidML), symbol: "drop")
             }
         }
@@ -237,13 +279,22 @@ struct TodayView: View {
 
     /// Favourites first, then the rest in the user's order.
     private var sortedPresets: [DrinkPreset] {
-        presets.filter(\.isFavourite) + presets.filter { !$0.isFavourite }
+        QuickLogRules.visible(presets)
     }
 
     private func log(_ preset: DrinkPreset) {
-        context.insert(preset.makeEntry())
+        let entry = preset.makeEntry()
+        context.insert(entry)
         try? context.save()
         loggedCount += 1
+        // Tile checkmark for a moment; "Logged … · Undo" at the bottom of the screen.
+        flashedPreset = preset.persistentModelID
+        withAnimation(.spring(duration: 0.35)) { router.showLogged(entry) }
+        let id = preset.persistentModelID
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            if flashedPreset == id { withAnimation { flashedPreset = nil } }
+        }
     }
 }
 
@@ -299,6 +350,8 @@ struct StatTile: View {
 
 struct QuickLogGrid: View {
     var presets: [DrinkPreset]
+    /// The tile that was just tapped, shown with a checkmark for a moment.
+    var flashed: PersistentIdentifier? = nil
     var onTap: (DrinkPreset) -> Void
 
     private let columns = [GridItem(.adaptive(minimum: 96), spacing: 10)]
@@ -327,7 +380,18 @@ struct QuickLogGrid: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 84)
                         .padding(6)
-                        .background(Color.accentColor.opacity(0.1), in: .rect(cornerRadius: 14))
+                        .background(flashed == preset.persistentModelID ? Color.green.opacity(0.25) : Color.accentColor.opacity(0.1),
+                                    in: .rect(cornerRadius: 14))
+                        .overlay {
+                            if flashed == preset.persistentModelID {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.title)
+                                    .foregroundStyle(.green)
+                                    .transition(.scale.combined(with: .opacity))
+                            }
+                        }
+                        .scaleEffect(flashed == preset.persistentModelID ? 0.96 : 1)
+                        .animation(.spring(duration: 0.3), value: flashed)
                         .overlay(alignment: .topTrailing) {
                             if preset.isFavourite {
                                 Image(systemName: "star.fill")
@@ -342,6 +406,30 @@ struct QuickLogGrid: View {
                 }
             }
         }
+    }
+}
+
+/// Confirmation after a quick log, with Undo.
+struct LoggedToast: View {
+    var entry: DrinkEntry
+    var onUndo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+            Text("Logged \(entry.name) · \(Format.ml(entry.volumeML))")
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+            Spacer()
+            Button("Undo", action: onUndo)
+                .font(.subheadline.bold())
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.regularMaterial, in: .capsule)
+        .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
     }
 }
 

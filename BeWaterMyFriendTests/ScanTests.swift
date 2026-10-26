@@ -89,7 +89,6 @@ final class ScanTests: XCTestCase {
     func testScannedDraftIsMarkedAsScanAndRemembered() throws {
         let product = try XCTUnwrap(parse(OFFFixtures.redBull, "9002490100070"))
         let draft = DrinkDraft(scanned: product)
-        XCTAssertTrue(draft.saveAsPreset)
         XCTAssertNotNil(draft.scanNote)
         let entry = draft.makeEntry()
         XCTAssertEqual(entry.source, .scan)
@@ -112,7 +111,7 @@ final class ScanTests: XCTestCase {
         let found = try context.fetch(FetchDescriptor<DrinkPreset>(predicate: #Predicate { $0.barcode == code }))
         XCTAssertEqual(found.map(\.name), ["Rivella Rot"])
         XCTAssertEqual(found.first?.makeEntry().source, .scan)
-        XCTAssertTrue(DrinkDraft(scannedPreset: try XCTUnwrap(found.first)).saveAsPreset,
-                      "corrections on a rescan update the saved version")
+        XCTAssertEqual(DrinkDraft(scannedPreset: try XCTUnwrap(found.first)).barcode, "7610097111072",
+                       "a rescan keeps the barcode, so corrections update the saved version")
     }
 }

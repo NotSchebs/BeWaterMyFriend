@@ -15,6 +15,19 @@ enum QuickAction: Equatable {
 final class AppRouter {
     static let shared = AppRouter()
     var pendingAction: QuickAction?
+    /// The drink just logged from the Quick log, shown with Undo at the bottom of the screen.
+    var lastLogged: DrinkEntry?
+    private var toastToken = UUID()
+
+    func showLogged(_ entry: DrinkEntry) {
+        let token = UUID()
+        toastToken = token
+        lastLogged = entry
+        Task {
+            try? await Task.sleep(for: .seconds(5))
+            if toastToken == token { lastLogged = nil }
+        }
+    }
 }
 
 /// Schedules drink reminders as local notifications. iOS can't run our code at
@@ -136,22 +149,34 @@ final class NotificationHandler: NSObject, UNUserNotificationCenterDelegate {
         self.container = container
     }
 
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+    /// Uses the completion-handler version on purpose: iOS must get "done" on the
+    /// main thread. The async version finished on a background thread, and UIKit
+    /// then aborted the app (crash reports from 26 Oct: an assertion in
+    /// -[UIApplication _performBlockAfterCATransactionCommitSynchronizes:]).
+    /// https://developer.apple.com/documentation/usernotifications/unusernotificationcenterdelegate/usernotificationcenter(_:didreceive:withcompletionhandler:)
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                            withCompletionHandler completionHandler: @escaping () -> Void) {
         let action = response.actionIdentifier
-        await MainActor.run {
-            switch action {
-            case ReminderScheduler.ActionID.logLast: logLastDrinkAgain()
-            case ReminderScheduler.ActionID.newDrink: AppRouter.shared.pendingAction = .newDrink
-            case ReminderScheduler.ActionID.scan: AppRouter.shared.pendingAction = .scan
-            default: break  // plain tap just opens the app
+        // UIKit's handler isn't marked Sendable; it's only ever called once, on main.
+        nonisolated(unsafe) let completionHandler = completionHandler
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                switch action {
+                case ReminderScheduler.ActionID.logLast: self.logLastDrinkAgain()
+                case ReminderScheduler.ActionID.newDrink: AppRouter.shared.pendingAction = .newDrink
+                case ReminderScheduler.ActionID.scan: AppRouter.shared.pendingAction = .scan
+                default: break  // plain tap just opens the app
+                }
             }
+            completionHandler()
         }
     }
 
     /// Show reminders even while the app is open.
-    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                            willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        nonisolated(unsafe) let completionHandler = completionHandler
+        DispatchQueue.main.async { completionHandler([.banner, .sound]) }
     }
 
     /// Copies the most recent drink with the current time.

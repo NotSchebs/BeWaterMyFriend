@@ -258,6 +258,7 @@
 				DEVELOPMENT_TEAM = NWWYFZZWSP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BeWaterMyFriend-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BeWaterMyFriend uses the camera only while you scan a drink's barcode.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read your weight and workouts from Apple Health to suggest a water goal.";
@@ -293,6 +294,7 @@
 				DEVELOPMENT_TEAM = NWWYFZZWSP;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "BeWaterMyFriend-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = BeWaterMyFriend;
 				INFOPLIST_KEY_NSCameraUsageDescription = "BeWaterMyFriend uses the camera only while you scan a drink's barcode.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "BeWaterMyFriend can read your weight and workouts from Apple Health to suggest a water goal.";

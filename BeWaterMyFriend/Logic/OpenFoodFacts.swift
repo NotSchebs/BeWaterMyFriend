@@ -74,7 +74,12 @@ nonisolated enum OpenFoodFacts {
             )
         }
 
-        let category = guessCategory(tags: tags, alcoholPercent: alcohol)
+        var category = guessCategory(tags: tags, alcoholPercent: alcohol)
+        // A ready-to-drink protein shake is often tagged as milk.
+        if [.milk, .other, .sportsDrink, .softDrink].contains(category),
+           ["protein", "whey", "eiweiss", "eiweiß"].contains(where: name.lowercased().contains) {
+            category = .proteinDrink
+        }
         let package = volumeML(quantity: product["quantity"] as? String,
                                productQuantity: number(product["product_quantity"]),
                                unit: product["product_quantity_unit"] as? String)
@@ -198,6 +203,7 @@ nonisolated enum OpenFoodFacts {
         if has("cocktails") { return .cocktail }
         if has("spirits", "distilled-beverages", "liqueurs") { return .spirits }
         if has("energy-drinks") { return .energyDrink }
+        if tags.contains(where: { $0.contains("protein") }) { return .proteinDrink }
         if has("coffees", "coffee-drinks", "iced-coffees") { return .coffee }
         if has("teas", "iced-teas", "tea-based-beverages") { return .tea }
         if has("sports-drinks") { return .sportsDrink }
