@@ -11,6 +11,8 @@ enum SettingsKey {
     static let prestigeLevel = "prestigeLevel"
     /// Total goal days at the last prestige; ranks count from here.
     static let prestigeBaseGoalDays = "prestigeBaseGoalDays"
+    /// Encoded `DojoArchive`.
+    static let dojoArchive = "dojoArchive"
     static let healthSyncEnabled = "healthSyncEnabled"
     static let healthWriteDelay = "healthWriteDelay"
     static let appearance = "appearance"

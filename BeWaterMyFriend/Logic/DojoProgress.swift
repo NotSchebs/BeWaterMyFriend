@@ -116,7 +116,78 @@ nonisolated struct DojoStats: Equatable, Sendable {
     var bestStreak = 0
 }
 
+/// Goal days and streaks of finished days older than a week, counted once and
+/// stored. Those days can't change any more (drinks can only be logged two
+/// days back), so the app doesn't have to recalculate years of history on
+/// every update: it only looks at the days after `throughDay`.
+struct DojoArchive: Codable, Equatable, Sendable {
+    /// Last archived logical day (midnight), or nil when nothing is archived yet.
+    var throughDay: Date?
+    var goalDays = 0
+    var bestStreak = 0
+    /// Consecutive goal days ending exactly on `throughDay`.
+    var trailingRun = 0
+
+    /// How many recent days stay "live" (recalculated on every update).
+    static let liveDays = 7
+
+    /// The last day that should be archived for `today`.
+    static func archiveLimit(today: Date, calendar: Calendar) -> Date {
+        calendar.date(byAdding: .day, value: -liveDays, to: today)!
+    }
+
+    /// Adds the days after `throughDay` up to and including `newThrough`.
+    /// `days` are the summaries for that range (days without entries may be missing).
+    func advanced(through newThrough: Date, days: [DaySummary], goalML: Double, calendar: Calendar) -> DojoArchive {
+        var result = self
+        let goalDates = Set(days.filter { $0.goalReached(goalML: goalML) }.map(\.day))
+        // Start the day after the old boundary; on the first run, at the first logged day.
+        guard var cursor = throughDay.flatMap({ calendar.date(byAdding: .day, value: 1, to: $0) })
+                ?? days.map(\.day).min() else {
+            result.throughDay = newThrough
+            return result
+        }
+        while cursor <= newThrough {
+            if goalDates.contains(cursor) {
+                result.goalDays += 1
+                result.trailingRun += 1
+                result.bestStreak = max(result.bestStreak, result.trailingRun)
+            } else {
+                result.trailingRun = 0
+            }
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor)!
+        }
+        result.throughDay = newThrough
+        return result
+    }
+}
+
 enum DojoProgress {
+    /// Stats from the archive plus the recent days after it.
+    static func stats(recentDays: [DaySummary], archive: DojoArchive, goalML: Double,
+                      today: Date, calendar: Calendar) -> DojoStats {
+        let recent = recentDays.filter { archive.throughDay == nil || $0.day > archive.throughDay! }
+        let goalDates = Set(recent.filter { $0.goalReached(goalML: goalML) }.map(\.day))
+        var stats = DojoStats(goalDays: archive.goalDays + goalDates.count, currentStreak: 0, bestStreak: archive.bestStreak)
+
+        // Walk from the day after the archive to today, continuing the archived run.
+        let first = archive.throughDay.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+            ?? recent.map(\.day).min() ?? today
+        var run = archive.trailingRun
+        var cursor = first
+        while cursor <= today {
+            if goalDates.contains(cursor) {
+                run += 1
+                stats.bestStreak = max(stats.bestStreak, run)
+            } else if cursor < today {
+                run = 0  // today doesn't break a streak while it's still running
+            }
+            cursor = calendar.date(byAdding: .day, value: 1, to: cursor)!
+        }
+        stats.currentStreak = run
+        return stats
+    }
+
     /// - Parameters:
     ///   - days: daily summaries (only days with entries).
     ///   - today: the current logical day (midnight of its calendar date).

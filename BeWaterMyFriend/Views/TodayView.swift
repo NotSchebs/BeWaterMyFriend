@@ -3,9 +3,22 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \DrinkEntry.timestamp, order: .reverse) private var entries: [DrinkEntry]
+    /// Only recent drinks (performance): older days live in the stored `DojoArchive`.
+    @Query private var entries: [DrinkEntry]
     @Query(sort: [SortDescriptor(\DrinkPreset.sortOrder), SortDescriptor(\DrinkPreset.name)])
     private var presets: [DrinkPreset]
+    @AppStorage(SettingsKey.dojoArchive) private var archiveData = Data()
+
+    init() {
+        // A bit more than the live days, so a gap before the archive catches up is covered.
+        let cutoff = Calendar.current.date(byAdding: .day, value: -(DojoArchive.liveDays + 3), to: .now) ?? .now
+        _entries = Query(filter: #Predicate<DrinkEntry> { $0.timestamp >= cutoff },
+                         sort: \DrinkEntry.timestamp, order: .reverse)
+    }
+
+    private var archive: DojoArchive {
+        (try? JSONDecoder().decode(DojoArchive.self, from: archiveData)) ?? DojoArchive()
+    }
 
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
@@ -81,8 +94,8 @@ struct TodayView: View {
         let todaysEntries = entries.filter { interval.contains($0.timestamp) && $0.timestamp < interval.end }
         let summary = Summaries.summary(forLogicalDay: today, entries: todaysEntries, boundary: boundary)
         let progress = summary.progress(goalML: goalML)
-        let stats = DojoProgress.stats(days: Summaries.daily(entries: entries, boundary: boundary),
-                                       goalML: goalML, today: today, calendar: boundary.calendar)
+        let stats = DojoProgress.stats(recentDays: Summaries.daily(entries: entries, boundary: boundary),
+                                       archive: archive, goalML: goalML, today: today, calendar: boundary.calendar)
         let goalDays = DojoProgress.rankGoalDays(bestTotal: bestGoalDays, currentTotal: stats.goalDays,
                                                  prestigeBase: prestigeBase)
         let belt = Belt.belt(forGoalDays: goalDays)
@@ -155,9 +168,26 @@ struct TodayView: View {
         .onChange(of: stats.goalDays, initial: true) { _, newValue in
             updateRank(goalDays: newValue)
         }
+        // Once a day (and on first launch), move finished days into the archive.
+        .task(id: today) { advanceArchive(today: today, boundary: boundary) }
         .onChange(of: progress >= 1) { wasReached, isReached in
             if isReached && !wasReached { splashTrigger += 1 }
         }
+    }
+
+    /// Counts finished days older than a week into the stored archive. On first
+    /// launch this reads the whole history once; afterwards only a day or two.
+    private func advanceArchive(today: Date, boundary: DayBoundary) {
+        let current = archive
+        let limit = DojoArchive.archiveLimit(today: today, calendar: boundary.calendar)
+        guard current.throughDay.map({ $0 < limit }) ?? true else { return }
+        let from = current.throughDay.map { boundary.interval(forLogicalDay: $0).end } ?? .distantPast
+        let to = boundary.interval(forLogicalDay: limit).end
+        let descriptor = FetchDescriptor<DrinkEntry>(predicate: #Predicate { $0.timestamp >= from && $0.timestamp < to })
+        let old = (try? context.fetch(descriptor)) ?? []
+        let next = current.advanced(through: limit, days: Summaries.daily(entries: old, boundary: boundary),
+                                    goalML: goalML, calendar: boundary.calendar)
+        archiveData = (try? JSONEncoder().encode(next)) ?? Data()
     }
 
     /// Remembers the best goal-day count and celebrates a newly earned belt.

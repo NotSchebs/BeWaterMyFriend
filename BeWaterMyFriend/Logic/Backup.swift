@@ -151,6 +151,8 @@ enum Backup {
             result.addedPresets += 1
         }
         try context.save()
+        // Imported drinks can be older than the archive: count everything again.
+        if result.addedDrinks > 0 { defaults.removeObject(forKey: SettingsKey.dojoArchive) }
 
         // Prestige base belongs to the prestige level: only take it from a file
         // with a higher prestige, otherwise ranks would be counted from the wrong point.

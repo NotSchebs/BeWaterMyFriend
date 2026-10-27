@@ -92,8 +92,14 @@ final class ReminderScheduler {
 
         let settings = Self.settings(from: defaults)
         let calendar = Calendar.current
-        let entries = (try? context.fetch(FetchDescriptor<DrinkEntry>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)]))) ?? []
-        registerCategory(lastDrink: entries.first)
+        // Only the last two days are needed (performance): today's progress and the last drink.
+        let since = Calendar.current.date(byAdding: .day, value: -2, to: now) ?? now
+        let entries = (try? context.fetch(FetchDescriptor<DrinkEntry>(
+            predicate: #Predicate { $0.timestamp >= since },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]))) ?? []
+        var newest = FetchDescriptor<DrinkEntry>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        newest.fetchLimit = 1
+        registerCategory(lastDrink: entries.first ?? (try? context.fetch(newest))?.first)
 
         // Today's progress, for "skip when on track".
         let goal = defaults.object(forKey: SettingsKey.dailyGoalML) as? Double ?? SettingsDefault.dailyGoalML

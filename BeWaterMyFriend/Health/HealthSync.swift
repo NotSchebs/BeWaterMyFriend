@@ -90,7 +90,7 @@ final class HealthSync {
                     PendingHealthDeletes.remove(id)
                 }
 
-                let entries = try context.fetch(FetchDescriptor<DrinkEntry>())
+                let entries = try context.fetch(Self.candidates(now: now))
                 let due = entries.filter {
                     $0.needsHealthWrite && (force || HealthPlan.isDue($0, delay: delay, boundary: boundary, now: now))
                 }
@@ -105,7 +105,7 @@ final class HealthSync {
             lastError = nil
             lastSync = now
             if manual || written > 0 {
-                let pending = try context.fetch(FetchDescriptor<DrinkEntry>()).filter(\.needsHealthWrite).count
+                let pending = try context.fetch(Self.candidates(now: now)).filter(\.needsHealthWrite).count
                 lastResult = written > 0
                     ? "Wrote \(written) \(written == 1 ? "drink" : "drinks") to Apple Health."
                     : (pending == 0 ? "Nothing waiting. Apple Health is up to date." : "Some drinks couldn't be written. Check Health access in Settings.")
@@ -135,6 +135,17 @@ final class HealthSync {
         try context.save()
         UserDefaults.standard.set(true, forKey: key)
         return true
+    }
+
+    /// Drinks that might still need writing: never written, or changed in the
+    /// last 30 days (every edit sets `modifiedAt` to now). This runs every
+    /// minute, so it must not load the whole history.
+    static func candidates(now: Date) -> FetchDescriptor<DrinkEntry> {
+        let since = Calendar.current.date(byAdding: .day, value: -30, to: now) ?? now
+        let never = Date.distantPast
+        return FetchDescriptor(predicate: #Predicate {
+            $0.healthWrittenAt == nil || ($0.modifiedAt ?? never) >= since
+        })
     }
 
     /// Returns false (entry stays pending) if Health access for one of its

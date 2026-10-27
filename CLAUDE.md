@@ -29,6 +29,7 @@ BeWaterMyFriend: SwiftUI + SwiftData hydration tracker for iPhone, later with He
 - Reminders: `ReminderPlanner` (pure, tested) picks one random time per interval; `ReminderScheduler` re-plans local notifications on app open and after every save (iOS can't wake the app at reminder time).
 - Quick log: max 12 (`QuickLogRules`), presets have `inQuickLog`; new drinks ask before becoming a preset (scans are always remembered for their barcode). Drinks can only be logged up to 2 logical days back (`LogTimeLimit`). Backups: `Backup` (JSON, additive import, progress only goes up). Dojo test mode is `#if DEBUG` only.
 - Anything tappable over a `List` (toasts etc.) must live inside the list (e.g. a section footer): overlays and safe-area insets let taps fall through to rows.
+- Performance: never summarize the whole history on a hot path. Old goal days/streaks live in `DojoArchive` (stored, advanced once a day); Today/Stats/AddDrink/Health/Reminders fetch only recent or candidate drinks. `BenchmarkTests` (BWMF_BENCHMARK=1) measures 10 years of data.
 - New SwiftData properties must be optional (or have a default) so existing databases on test phones migrate.
 - With Swift 6 + MainActor default isolation, custom `Shape`s and pure value types need `nonisolated`.
 - Nutrients are stored **per 100 ml**; totals are always computed from the current volume. They are saved as encoded `Data` (see `NutrientStorage`) because SwiftData crashes when reloading a struct whose fields are all nil.

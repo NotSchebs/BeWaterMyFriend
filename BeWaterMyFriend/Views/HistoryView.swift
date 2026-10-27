@@ -11,7 +11,10 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             let boundary = DayBoundary(dayEndMinutes: dayEndMinutes)
-            let days = Summaries.daily(entries: entries, boundary: boundary)
+            // Only the shown month is calculated (performance): filtering by time is
+            // cheap, adding up drinks is not.
+            let monthEntries = entries.filter { monthRange(boundary).contains($0.timestamp) }
+            let days = Summaries.daily(entries: monthEntries, boundary: boundary)
             let byDay = Dictionary(days.map { ($0.day, $0) }, uniquingKeysWith: { a, _ in a })
             let monthSummary = Summaries.monthly(days: days, goalML: goalML, calendar: boundary.calendar)
                 .first { boundary.calendar.isDate($0.month, equalTo: month, toGranularity: .month) }
@@ -48,6 +51,17 @@ struct HistoryView: View {
                 DayDetailView(day: day)
             }
         }
+    }
+}
+
+extension HistoryView {
+    /// From the start of the month's first logical day to the end of its last.
+    fileprivate func monthRange(_ boundary: DayBoundary) -> Range<Date> {
+        let calendar = boundary.calendar
+        let first = CalendarGrid.startOfMonth(month, calendar: calendar)
+        let next = calendar.date(byAdding: .month, value: 1, to: first)!
+        let last = calendar.date(byAdding: .day, value: -1, to: next)!
+        return boundary.interval(forLogicalDay: first).start..<boundary.interval(forLogicalDay: last).end
     }
 }
 

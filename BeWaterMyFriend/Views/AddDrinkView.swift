@@ -11,7 +11,14 @@ struct AddDrinkView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Query(sort: [SortDescriptor(\DrinkPreset.sortOrder), SortDescriptor(\DrinkPreset.name)]) private var presets: [DrinkPreset]
-    @Query(sort: \DrinkEntry.timestamp, order: .reverse) private var entries: [DrinkEntry]
+    /// The 500 most recent drinks are plenty for "drinks you had before" (performance).
+    @Query(Self.recentDrinks) private var entries: [DrinkEntry]
+
+    static var recentDrinks: FetchDescriptor<DrinkEntry> {
+        var d = FetchDescriptor<DrinkEntry>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        d.fetchLimit = 500
+        return d
+    }
     @State private var search = ""
 
     var body: some View {

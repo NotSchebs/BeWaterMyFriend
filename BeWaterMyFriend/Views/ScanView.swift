@@ -56,10 +56,14 @@ struct ScanView: View {
 
                 switch state {
                 case .idle:
-                    Text("Point the camera at a drink's barcode. Product data comes from Open Food Facts and needs internet.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+                    VStack(spacing: 8) {
+                        Label("Needs an internet connection (Wi-Fi or mobile data)", systemImage: "wifi")
+                            .font(.footnote.weight(.semibold))
+                        Text("Point the camera at a drink's barcode. Product data comes from Open Food Facts. Drinks you saved before also work offline.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .multilineTextAlignment(.center)
                 case .looking(let code):
                     ProgressView("Looking up \(code)…")
                 case .failed(let message):

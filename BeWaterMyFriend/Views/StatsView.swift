@@ -5,7 +5,14 @@ import SwiftUI
 /// Trends over the last week or month: daily amounts against the goal,
 /// weekly averages, weekdays, drink types, caffeine and alcohol.
 struct StatsView: View {
-    @Query(sort: \DrinkEntry.timestamp) private var entries: [DrinkEntry]
+    /// The last 10 weeks cover every chart (30 days + the 30 before for the
+    /// trend, 8 weeks of averages); older drinks aren't loaded (performance).
+    @Query private var entries: [DrinkEntry]
+
+    init() {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -70, to: .now) ?? .now
+        _entries = Query(filter: #Predicate<DrinkEntry> { $0.timestamp >= cutoff }, sort: \DrinkEntry.timestamp)
+    }
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @State private var period = Period.week
@@ -66,15 +73,28 @@ struct StatsView: View {
                     }
                 }
 
+                Section("Caffeine") {
+                    perDayChart(report.points.map { ($0.day, $0.caffeineMg) }, color: DrinkTint.coffee.color, unit: "mg")
+                    LabeledContent("In total", value: Format.mg(report.totalCaffeineMg))
+                    LabeledContent("Per day with caffeine",
+                                   value: Format.mg(average(report.points.map(\.caffeineMg))))
+                }
+
                 Section {
-                    caffeineChart(report)
-                    LabeledContent("Caffeine in total", value: Format.mg(report.totalCaffeineMg))
+                    perDayChart(report.points.map { ($0.day, $0.standardDrinks) }, color: DrinkTint.beer.color, unit: "std. drinks")
                     LabeledContent("Standard drinks in total", value: Format.standardDrinks(report.totalStandardDrinks))
-                    if let best = report.bestDay, let ml = best.ml {
+                    LabeledContent("Days with alcohol",
+                                   value: "\(report.points.filter { $0.standardDrinks > 0 }.count) of \(period.days)")
+                } header: {
+                    Text("Alcohol")
+                } footer: {
+                    Text("1 standard drink = 10 g of pure alcohol.")
+                }
+
+                if let best = report.bestDay, let ml = best.ml {
+                    Section {
                         LabeledContent("Best day", value: "\(best.day.formatted(.dateTime.weekday(.abbreviated).day().month())) · \(Format.ml(ml))")
                     }
-                } header: {
-                    Text("Caffeine & alcohol")
                 }
             }
             .dojoBackground()
@@ -165,16 +185,23 @@ struct StatsView: View {
         .padding(.vertical, 6)
     }
 
-    private func caffeineChart(_ report: StatsReport) -> some View {
-        Chart(report.points) { point in
-            BarMark(x: .value("Day", point.day, unit: .day), y: .value("mg", point.caffeineMg))
-                .foregroundStyle(DrinkTint.coffee.color)
+    /// Small bar chart per day (caffeine, alcohol).
+    private func perDayChart(_ values: [(Date, Double)], color: Color, unit: String) -> some View {
+        Chart(values, id: \.0) { day, value in
+            BarMark(x: .value("Day", day, unit: .day), y: .value(unit, value))
+                .foregroundStyle(color)
                 .cornerRadius(3)
         }
         .chartXAxis(.hidden)
-        .chartYAxisLabel("mg caffeine")
+        .chartYAxisLabel(unit)
         .frame(height: 110)
         .padding(.vertical, 6)
+    }
+
+    /// Average over days where the value isn't zero.
+    private func average(_ values: [Double]) -> Double {
+        let nonZero = values.filter { $0 > 0 }
+        return nonZero.isEmpty ? 0 : nonZero.reduce(0, +) / Double(nonZero.count)
     }
 
     private func trendText(_ change: Double?) -> String {

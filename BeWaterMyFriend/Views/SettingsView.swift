@@ -16,7 +16,7 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.reminderSmart) private var reminderSmart = ReminderSettings().smart
     @State private var notificationsDenied = false
     @Environment(\.modelContext) private var context
-    @Query private var allEntries: [DrinkEntry]
+    @Query(HealthSync.candidates(now: .now)) private var allEntries: [DrinkEntry]
     private var health = HealthSync.shared
     @State private var isWritingNow = false
     @State private var showResult = false
