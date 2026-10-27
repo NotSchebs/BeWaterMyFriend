@@ -208,9 +208,22 @@ struct DayDetailView: View {
     let day: Date
 
     @Environment(\.modelContext) private var context
-    @Query(sort: \DrinkEntry.timestamp, order: .reverse) private var entries: [DrinkEntry]
+    /// Only this day's drinks (performance), with a day of margin for a custom day end.
+    @Query private var entries: [DrinkEntry]
+
+    init(day: Date) {
+        self.day = day
+        let start = Calendar.current.startOfDay(for: day)
+        let from = Calendar.current.date(byAdding: .day, value: -1, to: start) ?? start
+        let to = Calendar.current.date(byAdding: .day, value: 2, to: start) ?? start
+        _entries = Query(filter: #Predicate<DrinkEntry> { $0.timestamp >= from && $0.timestamp < to },
+                         sort: \DrinkEntry.timestamp, order: .reverse)
+    }
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
     @State private var editor: EditorMode?
 
     var body: some View {
@@ -220,6 +233,24 @@ struct DayDetailView: View {
         let summary = Summaries.summary(forLogicalDay: day, entries: dayEntries, boundary: boundary)
 
         List {
+            if companionEnabled && !dayEntries.isEmpty {
+                Section {
+                    // Static (no animation): just how the day looked.
+                    HStack(spacing: 16) {
+                        NinjaDrop(progress: summary.progress(goalML: goalML), belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)),
+                                  layers: CompanionLogic.fillLayers(entries: dayEntries, goalML: goalML),
+                                  mood: CompanionLogic.dayMood(summary), animated: false)
+                            .frame(width: 48, height: 63)
+                            .padding(.trailing, 14)
+                        Text(CompanionLogic.dayCaption(summary, goalML: goalML))
+                            .font(.callout)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+
             Section("Totals") {
                 LabeledContent("Toward goal", value: "\(Format.ml(summary.goalFluidML)) (\(Format.percent(summary.progress(goalML: goalML))))")
                 LabeledContent("All fluids", value: Format.ml(summary.totalFluidML))

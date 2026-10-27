@@ -6,6 +6,11 @@ struct CompanionView: View {
     var progress: Double
     var layers: [FillLayer]
     var mood: CompanionMood
+    /// Why the drop is in this mood, and until when (nil when calm).
+    var reason: String? = nil
+    var until: Date? = nil
+    /// Increases with every logged drink: a short gulp reaction.
+    var reaction: Int = 0
     var belt: Belt
     var prestige: Int
     var stats: DojoStats
@@ -15,11 +20,20 @@ struct CompanionView: View {
     var body: some View {
         Button(action: onTap) {
             HStack(spacing: 16) {
-                NinjaDrop(progress: progress, belt: belt, layers: layers, mood: mood, prestige: prestige)
+                NinjaDrop(progress: progress, belt: belt, layers: layers, mood: mood, prestige: prestige, reaction: reaction)
                     .frame(width: 64, height: 84)
+                    // The headband tails reach ~20 pt past the drop on the right,
+                    // arms and speed lines a little on the left: keep the text clear.
+                    .padding(.leading, 6)
+                    .padding(.trailing, 18)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(message)
                         .font(.callout)
+                    if let reason {
+                        Text(until.map { "\(reason) · until \($0.formatted(date: .omitted, time: .shortened))" } ?? reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     HStack(spacing: 6) {
                         BeltBadge(belt: belt)
                         Text(belt.name)
@@ -85,6 +99,10 @@ struct NinjaDrop: View {
     var layers: [FillLayer]? = nil
     var mood: CompanionMood = .calm
     var prestige: Int = 0
+    /// Increases with every logged drink: a short squash-and-stretch "gulp".
+    var reaction: Int = 0
+    /// Off for small static drops (History, Stats): no repeating motion, no CPU.
+    var animated: Bool = true
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Flips once when the view appears; every repeating animation runs off it.
@@ -92,7 +110,7 @@ struct NinjaDrop: View {
     /// Caffeine jitter: 5 seconds, twice a minute.
     @State private var jittering = false
 
-    private var animate: Bool { moving && !reduceMotion }
+    private var animate: Bool { animated && moving && !reduceMotion }
 
     var body: some View {
         GeometryReader { geo in
@@ -143,16 +161,38 @@ struct NinjaDrop: View {
                        value: animate)
             // Drunk wobble sideways; caffeine jitter during bursts.
             .offset(x: wobble(w: w))
-            .animation(jittering ? .linear(duration: 0.05).repeatForever() : .easeInOut(duration: 1.5).repeatForever(),
-                       value: jittering ? animate : (mood == .drunk && animate))
+            .animation(jittering ? .linear(duration: 0.05).repeatForever()
+                       : (mood == .drunk ? .easeInOut(duration: 1.5).repeatForever() : .default),
+                       value: animate)
         }
         .scaleEffect(DojoProgress.companionScale(progress: progress), anchor: .bottom)
         .animation(.spring(duration: 0.6, bounce: 0.4), value: progress)
+        // Gulp: runs once per logged drink, nothing in between.
+        .keyframeAnimator(initialValue: 1.0, trigger: reaction) { content, stretch in
+            content.scaleEffect(x: 2 - stretch, y: stretch, anchor: .bottom)
+        } keyframes: { _ in
+            KeyframeTrack {
+                SpringKeyframe(0.82, duration: 0.14)
+                SpringKeyframe(1.14, duration: 0.18)
+                SpringKeyframe(1.0, duration: 0.45, spring: .bouncy)
+            }
+        }
         .accessibilityHidden(true)
+        // Every mood change (and each jitter burst) restarts all movements from
+        // scratch: the drop is rebuilt (.id) and the trigger flips again.
+        // Without this, a new mood's movement never started and the previous
+        // one kept repeating, so moods mixed (bug found 27 Oct).
+        .id(animationKey)
         .onAppear { moving = true }
+        .onChange(of: animationKey) {
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) { moving = false }
+            Task { @MainActor in moving = true }
+        }
         .task(id: mood) {
             // Check twice a second whether a jitter burst is on; cheap, and only while hyper.
-            guard mood == .hyper, !reduceMotion else { jittering = false; return }
+            guard mood == .hyper, animated, !reduceMotion else { jittering = false; return }
             while !Task.isCancelled {
                 let burst = CompanionLogic.isJitterBurst(at: .now)
                 if burst != jittering { jittering = burst }
@@ -160,6 +200,8 @@ struct NinjaDrop: View {
             }
         }
     }
+
+    private var animationKey: String { "\(mood)-\(jittering)" }
 
     private var swayAngle: Double {
         switch mood {

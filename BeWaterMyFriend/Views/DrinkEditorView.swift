@@ -50,6 +50,17 @@ struct DrinkEditorView: View {
     @State private var askQuickLog = false
     @Query private var presets: [DrinkPreset]
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
+    @AppStorage(SettingsKey.prestigeLevel) private var prestigeLevel = 0
+    /// Drinks of the last few hours, for the mood preview (no full history).
+    @Query(filter: DrinkEditorView.recentFilter()) private var recentEntries: [DrinkEntry]
+
+    private static func recentFilter() -> Predicate<DrinkEntry> {
+        let since = Date.now.addingTimeInterval(-4 * 3600)
+        return #Predicate { $0.timestamp >= since }
+    }
 
     init(mode: EditorMode) {
         self.mode = mode
@@ -64,6 +75,10 @@ struct DrinkEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
+                if companionEnabled && !mode.isPreset {
+                    Section { preview }
+                }
+
                 if let note = draft.scanNote {
                     Section {
                         Label(note, systemImage: "barcode.viewfinder")
@@ -223,6 +238,42 @@ struct DrinkEditorView: View {
         case .editEntry: "Edit drink"
         case .newPreset: "New preset"
         case .editPreset: "Edit preset"
+        }
+    }
+
+    /// The drop previews this drink: its colour, and the mood it would cause.
+    private var preview: some View {
+        let editing: DrinkEntry? = if case .editEntry(let entry) = mode { entry } else { nil }
+        let others = recentEntries.filter { $0.persistentModelID != editing?.persistentModelID }
+        let now = Date.now
+        let before = CompanionLogic.moodState(entries: others, now: now).mood
+        let after = CompanionLogic.moodState(entries: others + [draft.makeEntry()], now: now).mood
+        let belt = Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0))
+        let ml = DrinkMath.hydrationML(volumeML: draft.volumeML, percent: draft.effectiveHydrationPercent)
+        return HStack(spacing: 16) {
+            NinjaDrop(progress: 0.55, belt: belt, layers: [FillLayer(tint: draft.category.tint, fraction: 0.55)],
+                      mood: after, prestige: prestigeLevel)
+                .frame(width: 44, height: 58)
+                .padding(.trailing, 12)
+            Text(Self.previewText(before: before, after: after, ml: ml))
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    static func previewText(before: CompanionMood, after: CompanionMood, ml: Double) -> String {
+        guard after != before else {
+            return ml > 0 ? "This adds \(Format.ml(ml)) toward your goal." : "This won't count toward your goal."
+        }
+        switch after {
+        case .drunk: return "Whoa, this would make me properly drunk. Maybe a water first?"
+        case .tipsy: return "This will make me a bit tipsy."
+        case .hyper: return "Caffeine! This will make me hyper."
+        case .strong: return "Protein! Time to flex."
+        case .charged: return "Electrolytes! I'll be fully charged."
+        case .calm: return "This adds \(Format.ml(ml)) toward your goal."
         }
     }
 

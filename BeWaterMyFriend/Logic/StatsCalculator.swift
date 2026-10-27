@@ -117,3 +117,43 @@ enum StatsCalculator {
         (0..<max(days, 1)).reversed().compactMap { calendar.date(byAdding: .day, value: -$0, to: calendar.startOfDay(for: today)) }
     }
 }
+
+/// The ninja drop's one-sentence reading of the Stats charts. Picks the most
+/// notable thing; nil when there's too little data to say anything honest.
+enum StatsInsight {
+    static func sentence(report: StatsReport, entries: [DrinkEntry], calendar: Calendar) -> String? {
+        let logged = report.points.filter { $0.ml != nil }
+        guard logged.count >= 3 else { return nil }
+
+        // 1. Weekends vs weekdays (needs both).
+        let weekend = logged.filter { calendar.isDateInWeekend($0.day) }.compactMap(\.ml)
+        let weekday = logged.filter { !calendar.isDateInWeekend($0.day) }.compactMap(\.ml)
+        if weekend.count >= 1, weekday.count >= 2 {
+            let we = weekend.reduce(0, +) / Double(weekend.count)
+            let wd = weekday.reduce(0, +) / Double(weekday.count)
+            let diff = (we - wd) / wd * 100
+            if abs(diff) >= 15 {
+                return "You drink \(Int(abs(diff).rounded())) % \(diff < 0 ? "less" : "more") on weekends than on weekdays."
+            }
+        }
+
+        // 2. Clear trend against the period before.
+        if let change = report.averageChangePercent, abs(change) >= 10 {
+            return change > 0
+                ? "Up \(Int(change.rounded())) % compared with before. Keep flowing!"
+                : "Down \(Int((-change).rounded())) % compared with before. Let's catch up together."
+        }
+
+        // 3. Late caffeine.
+        let start = report.points.first?.day ?? .distantPast
+        let caffeine = entries.filter { $0.timestamp >= start && $0.caffeineMg > 0 }
+        let total = caffeine.reduce(0) { $0 + $1.caffeineMg }
+        let late = caffeine.filter { calendar.component(.hour, from: $0.timestamp) >= 16 }.reduce(0) { $0 + $1.caffeineMg }
+        if total >= 100, late / total >= 0.5 {
+            return "Most of your caffeine comes after 4 pm. Might be worth an earlier coffee."
+        }
+
+        // 4. Goal rate.
+        return "You reached your goal on \(report.goalDays) of \(logged.count) logged days."
+    }
+}

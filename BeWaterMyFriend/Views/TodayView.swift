@@ -41,6 +41,8 @@ struct TodayView: View {
     @State private var showDojo = false
     @State private var earnedBelt: Belt?
     @State private var splashTrigger = 0
+    /// The drop gulps once for every new drink today.
+    @State private var reactionCount = 0
 
     var body: some View {
         NavigationStack {
@@ -103,7 +105,8 @@ struct TodayView: View {
         let legend = CompanionLogic.tintTotals(entries: todaysEntries)
         // The timeline's date is the start of the minute; a drink logged a few
         // seconds later must already count, so use the exact time here.
-        let mood = CompanionLogic.mood(entries: entries, now: max(now, .now))
+        let moodState = CompanionLogic.moodState(entries: entries, now: max(now, .now))
+        let mood = moodState.mood
 
         ScrollViewReader { scroller in
         List {
@@ -113,7 +116,8 @@ struct TodayView: View {
                 }
                 .overlay { SplashBurst(trigger: splashTrigger) }
                 if companionEnabled {
-                    CompanionView(progress: progress, layers: layers, mood: mood, belt: belt,
+                    CompanionView(progress: progress, layers: layers, mood: mood,
+                                  reason: moodState.reason, until: moodState.until, reaction: reactionCount, belt: belt,
                                   prestige: prestigeLevel, stats: stats,
                                   goalDaysTowardBelt: goalDays) { showDojo = true }
                 }
@@ -170,6 +174,9 @@ struct TodayView: View {
         }
         // Once a day (and on first launch), move finished days into the archive.
         .task(id: today) { advanceArchive(today: today, boundary: boundary) }
+        .onChange(of: todaysEntries.count) { old, new in
+            if new > old { reactionCount += 1 }
+        }
         .onChange(of: progress >= 1) { wasReached, isReached in
             if isReached && !wasReached { splashTrigger += 1 }
         }

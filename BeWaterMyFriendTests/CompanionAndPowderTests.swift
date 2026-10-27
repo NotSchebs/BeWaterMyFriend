@@ -17,41 +17,55 @@ final class CompanionTests: XCTestCase {
         XCTAssertEqual(CompanionLogic.mood(entries: [entry(.water, ml: 500, minutesAgo: 10)], now: now), .calm)
     }
 
-    func testHyperWhenLastDrinkHadCaffeine() {
-        let espresso = entry(.coffee, ml: 30, minutesAgo: 20, caffeinePer100: 210)
+    func testHyperNeedsEnoughCaffeine() {
+        let tea = entry(.tea, ml: 250, minutesAgo: 10, caffeinePer100: 12)  // 30 mg
+        XCTAssertEqual(CompanionLogic.mood(entries: [tea], now: now), .calm, "a tea isn't enough")
+        let espresso = entry(.coffee, ml: 30, minutesAgo: 20, caffeinePer100: 210)  // 63 mg
         XCTAssertEqual(CompanionLogic.mood(entries: [espresso], now: now), .hyper)
+        XCTAssertEqual(CompanionLogic.mood(entries: [tea, entry(.tea, ml: 250, minutesAgo: 60, caffeinePer100: 12)], now: now),
+                       .hyper, "two teas add up to 60 mg")
     }
 
-    func testMoodFollowsTheLastDrink() {
-        let coffee = entry(.coffee, ml: 250, minutesAgo: 60, caffeinePer100: 40)
-        let water = entry(.water, ml: 250, minutesAgo: 10)
-        XCTAssertEqual(CompanionLogic.mood(entries: [coffee, water], now: now), .calm, "water after coffee calms it")
-        let shake = entry(.proteinShake, ml: 300, minutesAgo: 5)
-        XCTAssertEqual(CompanionLogic.mood(entries: [coffee, water, shake], now: now), .strong)
+    func testWaterDoesNotCancelCaffeine() {
+        let espresso = entry(.coffee, ml: 30, minutesAgo: 30, caffeinePer100: 210)
+        let water = entry(.water, ml: 500, minutesAgo: 5)
+        XCTAssertEqual(CompanionLogic.mood(entries: [espresso, water], now: now), .hyper)
     }
 
-    func testCaffeineWearsOffAfterThreeHours() {
-        let old = entry(.coffee, ml: 250, minutesAgo: 200, caffeinePer100: 40)
-        XCTAssertEqual(CompanionLogic.mood(entries: [old], now: now), .calm)
+    func testCaffeineWearsOffAfterThreeHoursWithEndTime() throws {
+        let espresso = entry(.coffee, ml: 30, minutesAgo: 120, caffeinePer100: 210)
+        let state = CompanionLogic.moodState(entries: [espresso], now: now)
+        XCTAssertEqual(state.mood, .hyper)
+        XCTAssertEqual(try XCTUnwrap(state.until).timeIntervalSince(now), 3600, accuracy: 1)
+        XCTAssertEqual(state.reason, "63 mg caffeine in the last 3 h")
+        XCTAssertEqual(CompanionLogic.mood(entries: [entry(.coffee, ml: 30, minutesAgo: 181, caffeinePer100: 210)], now: now), .calm)
     }
 
-    func testTipsyWhenLastDrinkWasAlcoholic() {
+    func testTipsyFromOneStandardDrinkWithinTwoHours() {
+        XCTAssertEqual(CompanionLogic.mood(entries: [entry(.beer, ml: 330, minutesAgo: 30, abv: 5)], now: now), .tipsy)
+        XCTAssertEqual(CompanionLogic.mood(entries: [entry(.beer, ml: 330, minutesAgo: 130, abv: 5)], now: now), .calm)
+        let small = entry(.beer, ml: 200, minutesAgo: 30, abv: 5)  // 0.8 std
+        XCTAssertEqual(CompanionLogic.mood(entries: [small], now: now), .calm)
+    }
+
+    func testAlcoholBeatsCaffeineWhateverCameLast() {
         let beer = entry(.beer, ml: 330, minutesAgo: 30, abv: 5)
-        XCTAssertEqual(CompanionLogic.mood(entries: [beer], now: now), .tipsy)
-        let coffeeAfter = entry(.coffee, ml: 250, minutesAgo: 10, caffeinePer100: 40)
-        XCTAssertEqual(CompanionLogic.mood(entries: [beer, coffeeAfter], now: now), .hyper)
+        let coffee = entry(.coffee, ml: 250, minutesAgo: 10, caffeinePer100: 40)
+        XCTAssertEqual(CompanionLogic.mood(entries: [beer, coffee], now: now), .tipsy)
     }
 
-    func testTooMuchAlcoholMakesItDrunkWhateverCameLast() {
-        // 3 beers × 1.3 standard drinks within 3 hours, then a water.
-        let beers = (0..<3).map { entry(.beer, ml: 330, minutesAgo: 120 - Double($0) * 30, abv: 5) }
-        let water = entry(.water, ml: 250, minutesAgo: 5)
-        XCTAssertEqual(CompanionLogic.mood(entries: beers + [water], now: now), .drunk)
-        // Two beers (2.6 standard drinks) are not enough.
-        XCTAssertEqual(CompanionLogic.mood(entries: Array(beers.prefix(2)), now: now), .tipsy)
-        // Three beers more than 3 hours ago no longer count.
+    func testDrunkFromThreeStandardDrinksInThreeHours() {
+        let beers = (0..<3).map { entry(.beer, ml: 330, minutesAgo: 150 - Double($0) * 30, abv: 5) }
+        XCTAssertEqual(CompanionLogic.mood(entries: beers + [entry(.water, ml: 250, minutesAgo: 5)], now: now), .drunk)
         let old = (0..<3).map { entry(.beer, ml: 330, minutesAgo: 240 + Double($0) * 10, abv: 5) }
         XCTAssertEqual(CompanionLogic.mood(entries: old, now: now), .calm)
+    }
+
+    func testEndTimeWithSeveralDrinks() throws {
+        // 2 × 40 mg: drops below 60 mg when the first leaves the 3 h window.
+        let items = [(now.addingTimeInterval(-7200), 40.0), (now.addingTimeInterval(-600), 40.0)]
+        let end = try XCTUnwrap(CompanionLogic.endTime(items, threshold: 60, window: 3 * 3600))
+        XCTAssertEqual(end.timeIntervalSince(now), 3600, accuracy: 1)
     }
 
     func testJitterFiveSecondsTwiceAMinute() {
@@ -88,7 +102,7 @@ final class CompanionTests: XCTestCase {
     func testStrongAndChargedFromPowders() {
         XCTAssertEqual(CompanionLogic.mood(entries: [entry(.proteinShake, ml: 300, minutesAgo: 30)], now: now), .strong)
         XCTAssertEqual(CompanionLogic.mood(entries: [entry(.electrolytes, ml: 500, minutesAgo: 30)], now: now), .charged)
-        XCTAssertEqual(CompanionLogic.mood(entries: [entry(.proteinShake, ml: 300, minutesAgo: 150)], now: now), .calm)
+        XCTAssertEqual(CompanionLogic.mood(entries: [entry(.proteinShake, ml: 300, minutesAgo: 61)], now: now), .calm)
     }
 
     func testFutureEntriesDontCount() {

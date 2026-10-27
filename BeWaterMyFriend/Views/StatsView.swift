@@ -16,6 +16,9 @@ struct StatsView: View {
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @State private var period = Period.week
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
 
     enum Period: String, CaseIterable, Identifiable {
         case week = "Week", month = "Month"
@@ -37,6 +40,22 @@ struct StatsView: View {
                     .pickerStyle(.segmented)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets())
+                }
+
+                if companionEnabled, let insight = StatsInsight.sentence(report: report, entries: entries, calendar: boundary.calendar) {
+                    Section {
+                        HStack(spacing: 16) {
+                            NinjaDrop(progress: report.goalRate, belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)),
+                                      animated: false)
+                                .frame(width: 40, height: 52)
+                                .padding(.trailing, 12)
+                            Text(insight)
+                                .font(.callout)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 2)
+                        .accessibilityElement(children: .combine)
+                    }
                 }
 
                 Section {

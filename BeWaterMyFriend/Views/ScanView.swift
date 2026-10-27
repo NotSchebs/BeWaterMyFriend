@@ -11,6 +11,10 @@ struct ScanView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @State private var typedCode = ""
+    @State private var found = false
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
     @State private var state: LookupState = .idle
     @FocusState private var fieldFocused: Bool
 
@@ -52,6 +56,11 @@ struct ScanView: View {
                     Button("Look up") { lookUp(typedCode) }
                         .buttonStyle(.borderedProminent)
                         .disabled(!OpenFoodFacts.isValidBarcode(typedCode) || isLooking)
+                }
+
+                if companionEnabled {
+                    ScanCompanion(phase: companionPhase, belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)))
+                        .frame(height: 70)
                 }
 
                 switch state {
@@ -119,10 +128,83 @@ struct ScanView: View {
         }
     }
 
+    private var companionPhase: ScanCompanion.Phase {
+        if found { return .found }
+        switch state {
+        case .idle, .looking: return .searching
+        case .failed: return .confused
+        }
+    }
+
     private func finish(_ draft: DrinkDraft) {
+        // A short thumbs-up before the review opens.
+        found = true
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(companionEnabled ? 500 : 0))
+            finishNow(draft)
+        }
+    }
+
+    private func finishNow(_ draft: DrinkDraft) {
         state = .idle
         dismiss()
         onResult(draft)
+    }
+}
+
+/// The ninja drop on the scan screen: looks around while searching, gives a
+/// thumbs-up when found, shrugs when nothing was found or there's no internet.
+struct ScanCompanion: View {
+    enum Phase { case searching, found, confused }
+    var phase: Phase
+    var belt: Belt
+    @State private var look = false
+
+    var body: some View {
+        HStack(spacing: 14) {
+            NinjaDrop(progress: phase == .found ? 1 : 0.4, belt: belt, mood: .calm)
+                .frame(width: 44, height: 58)
+                .rotationEffect(.degrees(phase == .searching ? (look ? 10 : -10) : (phase == .confused ? -12 : 0)), anchor: .bottom)
+                .animation(phase == .searching ? .easeInOut(duration: 1.2).repeatForever() : .spring, value: look)
+                .animation(.spring, value: phase)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: symbol)
+                        .font(.title3.bold())
+                        .foregroundStyle(color)
+                        .offset(x: 18, y: -6)
+                        .contentTransition(.symbolEffect(.replace))
+                }
+                .padding(.trailing, 18)
+            Text(text)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .onAppear { look = true }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var symbol: String {
+        switch phase {
+        case .searching: "magnifyingglass"
+        case .found: "hand.thumbsup.fill"
+        case .confused: "questionmark"
+        }
+    }
+
+    private var color: Color {
+        switch phase {
+        case .searching: Dojo.ink
+        case .found: .green
+        case .confused: .orange
+        }
+    }
+
+    private var text: String {
+        switch phase {
+        case .searching: "Looking for a barcode…"
+        case .found: "Found it!"
+        case .confused: "Hmm, I couldn't find that one."
+        }
     }
 }
 
