@@ -20,8 +20,12 @@ enum Dojo {
 }
 
 extension Color {
-    init(light: UIColor, dark: UIColor) {
-        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    /// `nonisolated` on purpose: during animations SwiftUI resolves colours on
+    /// its own render thread. With the app's default main-actor isolation this
+    /// closure counted as main-actor code, and Swift's runtime check stopped the
+    /// app whenever it ran off the main thread (crash found 29 Oct, day replay).
+    nonisolated init(light: UIColor, dark: UIColor) {
+        self.init(uiColor: UIColor { @Sendable traits in traits.userInterfaceStyle == .dark ? dark : light })
     }
 }
 
