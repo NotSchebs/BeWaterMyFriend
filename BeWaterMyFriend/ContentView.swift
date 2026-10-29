@@ -4,9 +4,6 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(SettingsKey.healthSyncEnabled) private var healthEnabled = false
-    @AppStorage(SettingsKey.healthWriteDelay) private var delayRaw = HealthWriteDelay.oneHour.rawValue
-    @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @AppStorage(SettingsKey.appearance) private var appearanceRaw = Appearance.system.rawValue
     @State private var selectedTab = AppTab.today
     @State private var saveWork: Task<Void, Never>?
@@ -57,34 +54,19 @@ struct ContentView: View {
         .animation(.spring(duration: 0.35), value: router.lastLogged?.persistentModelID)
         .fontDesign(.rounded)
         .preferredColorScheme(colorScheme)
-        // While the app is open, check every minute for drinks whose Health delay has passed.
+        // Background work (Health, goal, reminders): see BackgroundJobs. Skipped in UI tests.
         .task(id: scenePhase) {
-            guard scenePhase == .active else { return }
-            // Spread the startup work out instead of doing everything at once
-            // (performance): the screen comes first, background jobs follow.
-            try? await Task.sleep(for: .seconds(1))
-            await syncHealth()
-            try? await Task.sleep(for: .seconds(2))
-            await GoalService.shared.refresh()
-            try? await Task.sleep(for: .seconds(2))
-            await ReminderScheduler.shared.reschedule(context: context)
-            try? await Task.sleep(for: .seconds(55))
-            while !Task.isCancelled {
-                await syncHealth()
-                await GoalService.shared.refresh()  // new workouts, a new day (weather is cached)
-                try? await Task.sleep(for: .seconds(60))
-            }
+            guard scenePhase == .active, !AppEnvironment.isUITest else { return }
+            await BackgroundJobs.whileActive(context: context)
         }
-        // And right after any change, so "Immediately" really is immediate.
         .onReceive(NotificationCenter.default.publisher(for: ModelContext.didSave)) { _ in
+            guard !AppEnvironment.isUITest else { return }
             // Several saves in a row (e.g. a sync writing many drinks) trigger one run.
             saveWork?.cancel()
             saveWork = Task {
                 try? await Task.sleep(for: .milliseconds(800))
                 guard !Task.isCancelled else { return }
-                await syncHealth()
-                // Progress and the "last drink" button changed: re-plan reminders.
-                await ReminderScheduler.shared.reschedule(context: context)
+                await BackgroundJobs.afterSave(context: context)
             }
         }
     }
@@ -96,13 +78,6 @@ struct ContentView: View {
         case .light: .light
         case .dark: .dark
         }
-    }
-
-    private func syncHealth() async {
-        guard healthEnabled else { return }
-        await HealthSync.shared.sync(context: context,
-                                     delay: HealthWriteDelay(rawValue: delayRaw) ?? .oneHour,
-                                     boundary: DayBoundary(dayEndMinutes: dayEndMinutes))
     }
 }
 

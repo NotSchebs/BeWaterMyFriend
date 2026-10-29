@@ -14,11 +14,19 @@
 			remoteGlobalIDString = A10000000000000000000008;
 			remoteInfo = BeWaterMyFriend;
 		};
+		A10000000000000000000022 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000008;
+			remoteInfo = BeWaterMyFriend;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A10000000000000000000004 /* BeWaterMyFriend.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BeWaterMyFriend.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000005 /* BeWaterMyFriendTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BeWaterMyFriendTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000001B /* BeWaterMyFriendUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BeWaterMyFriendUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -30,6 +38,11 @@
 		A10000000000000000000007 /* BeWaterMyFriendTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = BeWaterMyFriendTests;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000001C /* BeWaterMyFriendUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BeWaterMyFriendUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -49,6 +62,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1000000000000000000001F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -57,6 +77,7 @@
 			children = (
 				A10000000000000000000006 /* BeWaterMyFriend */,
 				A10000000000000000000007 /* BeWaterMyFriendTests */,
+				A1000000000000000000001C /* BeWaterMyFriendUITests */,
 				A10000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,6 +87,7 @@
 			children = (
 				A10000000000000000000004 /* BeWaterMyFriend.app */,
 				A10000000000000000000005 /* BeWaterMyFriendTests.xctest */,
+				A1000000000000000000001B /* BeWaterMyFriendUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,6 +136,27 @@
 			productReference = A10000000000000000000005 /* BeWaterMyFriendTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A1000000000000000000001D /* BeWaterMyFriendUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000000000000000000023 /* Build configuration list for PBXNativeTarget "BeWaterMyFriendUITests" */;
+			buildPhases = (
+				A1000000000000000000001E /* Sources */,
+				A1000000000000000000001F /* Frameworks */,
+				A10000000000000000000020 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A10000000000000000000021 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1000000000000000000001C /* BeWaterMyFriendUITests */,
+			);
+			name = BeWaterMyFriendUITests;
+			productName = BeWaterMyFriendUITests;
+			productReference = A1000000000000000000001B /* BeWaterMyFriendUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -128,6 +171,10 @@
 						CreatedOnToolsVersion = 27.0;
 					};
 					A10000000000000000000009 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = A10000000000000000000008;
+					};
+					A1000000000000000000001D = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = A10000000000000000000008;
 					};
@@ -149,6 +196,7 @@
 			targets = (
 				A10000000000000000000008 /* BeWaterMyFriend */,
 				A10000000000000000000009 /* BeWaterMyFriendTests */,
+				A1000000000000000000001D /* BeWaterMyFriendUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -162,6 +210,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A1000000000000000000000F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000000000000000000020 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -185,6 +240,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1000000000000000000001E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -192,6 +254,11 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000008 /* BeWaterMyFriend */;
 			targetProxy = A10000000000000000000011 /* PBXContainerItemProxy */;
+		};
+		A10000000000000000000021 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000008 /* BeWaterMyFriend */;
+			targetProxy = A10000000000000000000022 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -357,6 +424,42 @@
 			};
 			name = Release;
 		};
+		A10000000000000000000024 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NWWYFZZWSP;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.notschebs.BeWaterMyFriendUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = BeWaterMyFriend;
+			};
+			name = Debug;
+		};
+		A10000000000000000000025 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NWWYFZZWSP;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.notschebs.BeWaterMyFriendUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = BeWaterMyFriend;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -383,6 +486,15 @@
 			buildConfigurations = (
 				A10000000000000000000019 /* Debug */,
 				A1000000000000000000001A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000000000000000000023 /* Build configuration list for PBXNativeTarget "BeWaterMyFriendUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000000000000000000024 /* Debug */,
+				A10000000000000000000025 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

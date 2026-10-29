@@ -269,6 +269,8 @@ struct TodayView: View {
                         .frame(width: 170, height: 170)
                     VStack(spacing: 2) {
                         Text(Format.ml(summary.goalFluidML))
+                            .minimumScaleFactor(0.6)
+                            .lineLimit(1)
                             .font(.title2.bold())
                             .contentTransition(.numericText())
                         Text("of \(Format.ml(goalML))")
@@ -278,6 +280,9 @@ struct TodayView: View {
                             .font(.caption.bold())
                             .foregroundStyle(Color.accentColor)
                     }
+                    .frame(width: 130)
+                    // The ring has a fixed size, so its text stops growing at some point.
+                    .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 }
                 .contentShape(Circle())
             }
@@ -295,7 +300,7 @@ struct TodayView: View {
                     .foregroundStyle(.secondary)
             }
 
-            HStack {
+            StatTileRow {
                 StatTile(title: "Caffeine", value: Format.mg(summary.caffeineMg), symbol: "bolt.fill")
                 Button { showAlcoholInfo = true } label: {
                     StatTile(title: "Std. drinks ⓘ", value: Format.standardDrinks(summary.standardDrinks),
@@ -332,173 +337,6 @@ struct TodayView: View {
             try? await Task.sleep(for: .seconds(1.2))
             if flashedPreset == id { withAnimation { flashedPreset = nil } }
         }
-    }
-}
-
-/// What each colour in the ring and the drop means, with today's amount.
-struct ColorLegend: View {
-    var totals: [TintTotal]
-
-    private let columns = [GridItem(.adaptive(minimum: 140), spacing: 8, alignment: .leading)]
-
-    var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
-            ForEach(totals, id: \.tint) { total in
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(total.tint.ringColor)
-                        .frame(width: 10, height: 10)
-                    Text(total.tint.displayName)
-                        .font(.caption)
-                        .lineLimit(1)
-                    Text(Format.ml(total.ml))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .accessibilityElement(children: .combine)
-            }
-        }
-        .padding(.horizontal, 4)
-    }
-}
-
-struct StatTile: View {
-    var title: String
-    var value: String
-    var symbol: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: symbol)
-                .foregroundStyle(Color.accentColor)
-            Text(value)
-                .font(.subheadline.bold())
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-struct QuickLogGrid: View {
-    var presets: [DrinkPreset]
-    /// The tile that was just tapped, shown with a checkmark for a moment.
-    var flashed: PersistentIdentifier? = nil
-    var onTap: (DrinkPreset) -> Void
-
-    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 10)]
-
-    var body: some View {
-        if presets.isEmpty {
-            Text("No presets. Add some in Settings.")
-                .foregroundStyle(.secondary)
-        } else {
-            LazyVGrid(columns: columns, spacing: 10) {
-                ForEach(presets) { preset in
-                    Button {
-                        onTap(preset)
-                    } label: {
-                        VStack(spacing: 6) {
-                            Image(systemName: preset.category.symbolName)
-                                .font(.title3)
-                                .foregroundStyle(preset.category.isAlcoholic ? .orange : Color.accentColor)
-                            Text(preset.name)
-                                .font(.caption.weight(.semibold))
-                                .lineLimit(2)
-                                .multilineTextAlignment(.center)
-                            Text(Format.ml(preset.volumeML))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 84)
-                        .padding(6)
-                        .background(flashed == preset.persistentModelID ? Color.green.opacity(0.25) : Color.accentColor.opacity(0.1),
-                                    in: .rect(cornerRadius: 14))
-                        .overlay {
-                            if flashed == preset.persistentModelID {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(.green)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .scaleEffect(flashed == preset.persistentModelID ? 0.96 : 1)
-                        .animation(.spring(duration: 0.3), value: flashed)
-                        .overlay(alignment: .topTrailing) {
-                            if preset.isFavourite {
-                                Image(systemName: "star.fill")
-                                    .font(.caption2)
-                                    .foregroundStyle(.yellow)
-                                    .padding(6)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Log \(preset.name), \(Format.ml(preset.volumeML))")
-                }
-            }
-        }
-    }
-}
-
-/// Confirmation after a quick log, with Undo.
-struct LoggedToast: View {
-    var entry: DrinkEntry
-    var onUndo: () -> Void
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-            Text("Logged \(entry.name) · \(Format.ml(entry.volumeML))")
-                .font(.subheadline.weight(.medium))
-                .lineLimit(1)
-            Spacer()
-            Button("Undo", action: onUndo)
-                .font(.subheadline.bold())
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.regularMaterial, in: .capsule)
-        .overlay(Capsule().stroke(Color.green.opacity(0.4), lineWidth: 1))
-        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-    }
-}
-
-struct EntryRow: View {
-    var entry: DrinkEntry
-    var showsDate = false
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: entry.category.symbolName)
-                .foregroundStyle(entry.category.isAlcoholic ? .orange : Color.accentColor)
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(entry.name)
-                Text(details)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(Format.ml(entry.volumeML))
-                .font(.subheadline.monospacedDigit())
-        }
-        .contentShape(.rect)
-    }
-
-    private var details: String {
-        var parts = [showsDate
-            ? entry.timestamp.formatted(date: .abbreviated, time: .shortened)
-            : entry.timestamp.formatted(date: .omitted, time: .shortened)]
-        if entry.caffeineMg > 0 { parts.append(Format.mg(entry.caffeineMg) + " caffeine") }
-        if let abv = entry.alcoholPercent, abv > 0 { parts.append("\(abv.formatted()) % alc.") }
-        return parts.joined(separator: " · ")
     }
 }
 

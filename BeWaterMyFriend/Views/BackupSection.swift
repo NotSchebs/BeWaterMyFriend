@@ -57,7 +57,10 @@ struct BackupSection: View {
     }
 }
 
-struct BackupDocument: FileDocument {
+/// `nonisolated`: SwiftUI reads and writes documents on a background thread.
+/// As main-actor code (the app's default) that could stop the app, like the
+/// colour crash on 29 Oct. It only holds `Data`, so it's safe anywhere.
+nonisolated struct BackupDocument: FileDocument {
     static let readableContentTypes: [UTType] = [.json]
     var data: Data
 

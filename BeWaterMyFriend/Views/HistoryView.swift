@@ -43,6 +43,7 @@ struct HistoryView: View {
                         NavigationLink(value: day.day) {
                             DayRow(day: day, goalML: goalML)
                         }
+                        .accessibilityIdentifier("dayRow")
                     }
                 }
             }
@@ -123,6 +124,8 @@ struct CalendarMonthView: View {
             }
         }
         .padding(.vertical, 4)
+        // Seven fixed-width columns: day numbers stop growing before they overflow the rings.
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
         .gesture(DragGesture(minimumDistance: 30).onEnded { value in
             if value.translation.width < -40 { shift(1) } else if value.translation.width > 40 { shift(-1) }
         })
@@ -214,7 +217,7 @@ struct MonthSummaryRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
+            StatTileRow {
                 StatTile(title: "Avg / day", value: Format.ml(month.averageGoalFluidPerLoggedDay), symbol: "chart.bar.fill")
                 StatTile(title: "Goal reached", value: "\(month.daysGoalReached) / \(month.loggedDays)", symbol: "checkmark.seal.fill")
                 StatTile(title: "Caffeine", value: Format.mg(month.caffeineMg), symbol: "bolt.fill")
@@ -381,6 +384,7 @@ struct DayReplayView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(playing ? "Replaying the day" : "Replay the day")
+            .accessibilityIdentifier("replayButton")
 
             // No text animation: steps can be 0.35 s apart and a cross-fade gets messy.
             SpeechBubble(text: bubbleText(current))

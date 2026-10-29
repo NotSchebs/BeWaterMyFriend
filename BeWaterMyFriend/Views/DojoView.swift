@@ -30,7 +30,7 @@ struct DojoView: View {
                 }
 
                 Section("Training") {
-                    HStack {
+                    StatTileRow {
                         StatTile(title: "Goal days", value: "\(goalDays)", symbol: "checkmark.seal.fill")
                         StatTile(title: "Streak", value: "\(stats.currentStreak)", symbol: "flame.fill")
                         StatTile(title: "Best streak", value: "\(stats.bestStreak)", symbol: "trophy.fill")
