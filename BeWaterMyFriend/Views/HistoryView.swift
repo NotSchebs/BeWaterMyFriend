@@ -7,6 +7,9 @@ struct HistoryView: View {
     @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
     @AppStorage(SettingsKey.dayEndMinutes) private var dayEndMinutes = SettingsDefault.dayEndMinutes
     @State private var month = CalendarGrid.startOfMonth(.now, calendar: .current)
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
 
     var body: some View {
         NavigationStack {
@@ -23,7 +26,8 @@ struct HistoryView: View {
             List {
                 Section {
                     CalendarMonthView(month: $month, onOpen: { openedDay = $0 }, summaries: byDay, goalML: goalML,
-                                      today: boundary.logicalDay(for: .now), calendar: boundary.calendar)
+                                      today: boundary.logicalDay(for: .now), calendar: boundary.calendar,
+                                      belt: companionEnabled ? Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)) : nil)
                 }
                 if let monthSummary {
                     Section("This month") {
@@ -74,10 +78,21 @@ struct CalendarMonthView: View {
     var goalML: Double
     var today: Date
     var calendar: Calendar
+    /// The drop's belt; nil when the companion is off.
+    var belt: Belt? = nil
+
+    /// The drop stands on the month's best day and hops to the new one when the
+    /// month changes; tapped, it says what made the day the best.
+    @Namespace private var dropSpace
+    @State private var showBestLine = false
+    @State private var taps = 0
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
+        let best = belt == nil ? nil : CompanionLogic.bestDay(in: summaries.values.filter {
+            calendar.isDate($0.day, equalTo: month, toGranularity: .month)
+        })
         VStack(spacing: 10) {
             HStack {
                 Button { shift(-1) } label: { Image(systemName: "chevron.left") }
@@ -100,7 +115,7 @@ struct CalendarMonthView: View {
                 }
                 ForEach(Array(CalendarGrid.cells(forMonthContaining: month, calendar: calendar).enumerated()), id: \.offset) { _, day in
                     if let day {
-                        dayCell(day)
+                        dayCell(day, best: best)
                     } else {
                         Color.clear.frame(height: 44)
                     }
@@ -114,7 +129,7 @@ struct CalendarMonthView: View {
     }
 
     @ViewBuilder
-    private func dayCell(_ day: Date) -> some View {
+    private func dayCell(_ day: Date, best: DaySummary?) -> some View {
         let summary = summaries[day]
         let isToday = calendar.isDate(day, inSameDayAs: today)
         let isFuture = day > today
@@ -140,21 +155,57 @@ struct CalendarMonthView: View {
         .frame(maxWidth: .infinity)
         .contentShape(.rect)
 
-        if summary != nil {
-            // A plain button, not a NavigationLink: in a List, links add a chevron per cell.
-            Button { onOpen(day) } label: { label }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), \(Format.percent(summary!.progress(goalML: goalML)))")
-        } else {
-            label
-                .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), no drinks")
+        Group {
+            if summary != nil {
+                // A plain button, not a NavigationLink: in a List, links add a chevron per cell.
+                Button { onOpen(day) } label: { label }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), \(Format.percent(summary!.progress(goalML: goalML)))")
+            } else {
+                label
+                    .accessibilityLabel("\(day.formatted(date: .long, time: .omitted)), no drinks")
+            }
         }
+        // Outside the day's button, so tapping the day still opens it.
+        .overlay(alignment: .top) {
+            if let belt, let best, calendar.isDate(best.day, inSameDayAs: day) {
+                bestDayDrop(best, belt: belt)
+            }
+        }
+    }
+
+    private func bestDayDrop(_ best: DaySummary, belt: Belt) -> some View {
+        let line = CompanionLines.bestDay(ml: best.goalFluidML,
+                                          dayText: best.day.formatted(.dateTime.weekday(.abbreviated).day()),
+                                          monthText: month.formatted(.dateTime.month(.wide)), seed: taps)
+        return Button {
+            showBestLine = true
+        } label: {
+            // Static: one tiny drop with that day's face, no animation cost.
+            NinjaDrop(progress: best.progress(goalML: goalML), belt: belt, mood: CompanionLogic.dayMood(best), animated: false)
+                .frame(width: 15, height: 20)
+                .padding(4)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .matchedGeometryEffect(id: "bestDayDrop", in: dropSpace)
+        // On the ring's top-right edge.
+        .offset(x: 18, y: -10)
+        .popover(isPresented: $showBestLine) {
+            Text(line)
+                .font(.footnote)
+                .padding(12)
+                .presentationCompactAdaptation(.popover)
+        }
+        .onChange(of: showBestLine) { if !showBestLine { taps += 1 } }
+        .accessibilityLabel(line)
     }
 
     private func shift(_ months: Int) {
         guard let next = calendar.date(byAdding: .month, value: months, to: month) else { return }
         if next > today && !calendar.isDate(next, equalTo: today, toGranularity: .month) { return }
-        withAnimation(.easeInOut(duration: 0.2)) { month = CalendarGrid.startOfMonth(next, calendar: calendar) }
+        // A springy change, so the drop visibly hops to the new month's best day.
+        withAnimation(.spring(duration: 0.45, bounce: 0.35)) { month = CalendarGrid.startOfMonth(next, calendar: calendar) }
     }
 }
 
@@ -235,19 +286,11 @@ struct DayDetailView: View {
         List {
             if companionEnabled && !dayEntries.isEmpty {
                 Section {
-                    // Static (no animation): just how the day looked.
-                    HStack(spacing: 16) {
-                        NinjaDrop(progress: summary.progress(goalML: goalML), belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)),
-                                  layers: CompanionLogic.fillLayers(entries: dayEntries, goalML: goalML),
-                                  mood: CompanionLogic.dayMood(summary), animated: false)
-                            .frame(width: 48, height: 63)
-                            .padding(.trailing, 14)
-                        Text(CompanionLogic.dayCaption(summary, goalML: goalML))
-                            .font(.callout)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.vertical, 4)
-                    .accessibilityElement(children: .combine)
+                    DayReplayView(entries: dayEntries, goalML: goalML,
+                                  belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)),
+                                  finalMood: CompanionLogic.dayMood(summary),
+                                  caption: CompanionLogic.dayCaption(summary, goalML: goalML,
+                                                                     seed: CompanionLines.daySeed(day, calendar: boundary.calendar)))
                 }
             }
 
@@ -290,6 +333,87 @@ struct DayDetailView: View {
         .navigationTitle(day.formatted(.dateTime.weekday(.abbreviated).day().month()))
         .sheet(item: $editor) { mode in
             DrinkEditorView(mode: mode)
+        }
+    }
+}
+
+/// The day view's drop. Still, it shows how the day ended. Tapped, it replays
+/// the day drink by drink (fill, colours, moods), using the same rules as the
+/// Today screen. It only animates during the replay.
+struct DayReplayView: View {
+    var entries: [DrinkEntry]
+    var goalML: Double
+    var belt: Belt
+    var finalMood: CompanionMood
+    var caption: String
+
+    @State private var step: Int?
+    @State private var reaction = 0
+    @State private var player: Task<Void, Never>?
+    @State private var replays = 0
+
+    private var steps: [CompanionLogic.ReplayStep] { CompanionLogic.replay(entries: entries, goalML: goalML) }
+
+    var body: some View {
+        let steps = steps
+        let current = step.flatMap { $0 >= 0 && $0 < steps.count ? steps[$0] : nil }
+        let playing = step != nil
+
+        HStack(alignment: .center, spacing: 10) {
+            Button(action: { play(steps) }) {
+                NinjaDrop(progress: playing ? (current?.progress ?? 0) : (steps.last?.progress ?? 0),
+                          belt: belt,
+                          layers: playing ? (current?.layers ?? []) : CompanionLogic.fillLayers(entries: entries, goalML: goalML),
+                          mood: playing ? (current?.mood ?? .calm) : finalMood,
+                          reaction: reaction, animated: playing)
+                    .frame(width: 52, height: 68)
+                    .padding(.leading, 4)
+                    .padding(.trailing, 16)
+                    .overlay(alignment: .bottomLeading) {
+                        if !playing {
+                            Image(systemName: "play.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(Dojo.ink, Dojo.card)
+                                .offset(x: -6, y: 4)
+                                .transition(.scale.combined(with: .opacity))
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(playing ? "Replaying the day" : "Replay the day")
+
+            // No text animation: steps can be 0.35 s apart and a cross-fade gets messy.
+            SpeechBubble(text: bubbleText(current))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 6)
+        .onDisappear { player?.cancel() }
+    }
+
+    private func bubbleText(_ current: CompanionLogic.ReplayStep?) -> String {
+        guard step != nil else { return caption }
+        guard let current else { return CompanionLines.replayStart(seed: replays) }
+        return "\(current.time.formatted(date: .omitted, time: .shortened)) · "
+            + CompanionLines.replayLine(name: current.name, mood: current.mood, moodChanged: current.moodChanged)
+    }
+
+    /// About 3 seconds in total, whatever the number of drinks (0.35–0.9 s per drink).
+    private func play(_ steps: [CompanionLogic.ReplayStep]) {
+        player?.cancel()
+        replays += 1
+        let pause = min(max(3.0 / Double(max(steps.count, 1)), 0.35), 0.9)
+        player = Task { @MainActor in
+            withAnimation(.easeOut(duration: 0.25)) { step = -1 }
+            try? await Task.sleep(for: .milliseconds(700))
+            for i in steps.indices {
+                guard !Task.isCancelled else { return }
+                step = i
+                reaction += 1
+                try? await Task.sleep(for: .seconds(pause))
+            }
+            try? await Task.sleep(for: .milliseconds(900))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.25)) { step = nil }
         }
     }
 }

@@ -24,6 +24,14 @@ final class CompanionCaptionTests: XCTestCase {
     func testPreviewText() {
         XCTAssertEqual(DrinkEditorView.previewText(before: .calm, after: .hyper, ml: 30), "Caffeine! This will make me hyper.")
         XCTAssertEqual(DrinkEditorView.previewText(before: .hyper, after: .hyper, ml: 30), "This adds 30 ml toward your goal.")
+        // With progress: where the drink gets us, or that it reaches the goal.
+        XCTAssertEqual(DrinkEditorView.previewText(before: .calm, after: .calm, ml: 250, progressBefore: 0.4, progressAfter: 0.5),
+                       "+250 ml. We'd be at 50%.")
+        XCTAssertEqual(DrinkEditorView.previewText(before: .calm, after: .calm, ml: 500, progressBefore: 0.9, progressAfter: 1.15),
+                       "This gets us to the goal! Osu!")
+        XCTAssertEqual(CompanionLogic.mood(for: .coffee), .hyper)
+        XCTAssertEqual(CompanionLogic.mood(for: .wine), .tipsy)
+        XCTAssertEqual(CompanionLogic.mood(for: .water), .calm)
     }
 
     func testWeekendInsight() throws {
@@ -53,5 +61,65 @@ final class CompanionCaptionTests: XCTestCase {
         let r = StatsCalculator.report(entries: entries, days: 7, goalML: 2000, today: date(2026, 10, 26), boundary: boundary)
         let s = try XCTUnwrap(StatsInsight.sentence(report: r, entries: entries, calendar: zurich))
         XCTAssertTrue(s.contains("after 4 pm"), s)
+    }
+
+    func testInsightTargets() throws {
+        // Weekend insight points at the weaker weekend day in the weekday chart.
+        var entries: [DrinkEntry] = []
+        for d in 20...23 { entries.append(water(2000, on: d)) }
+        entries.append(water(1200, on: 24))  // Saturday
+        entries.append(water(800, on: 25))   // Sunday
+        let r = StatsCalculator.report(entries: entries, days: 7, goalML: 2000, today: date(2026, 10, 26), boundary: boundary)
+        let insight = try XCTUnwrap(StatsInsight.make(report: r, entries: entries, calendar: zurich))
+        XCTAssertEqual(insight.target, .weekday(1))  // Sunday
+
+        // Late caffeine points at the day with the most caffeine.
+        var coffee = Nutrients()
+        coffee.caffeineMg = 40
+        var late: [DrinkEntry] = []
+        for d in 22...26 {
+            late.append(water(2000, on: d))
+            late.append(DrinkEntry(timestamp: date(2026, 10, d, 17), name: "Coffee", category: .coffee,
+                                   volumeML: d == 24 ? 500 : 250, nutrientsPer100ml: coffee))
+        }
+        let r2 = StatsCalculator.report(entries: late, days: 7, goalML: 2000, today: date(2026, 10, 26), boundary: boundary)
+        XCTAssertEqual(StatsInsight.make(report: r2, entries: late, calendar: zurich)?.target, .caffeine(date(2026, 10, 24)))
+    }
+
+    func testWordingVariants() {
+        var day = DaySummary(day: date(2026, 10, 24))
+        day.goalFluidML = 2500
+        XCTAssertNotEqual(CompanionLogic.dayCaption(day, goalML: 2000, seed: 0), CompanionLogic.dayCaption(day, goalML: 2000, seed: 1))
+        // Any seed works, also negative and large ones.
+        XCTAssertEqual(CompanionLines.pick(["a", "b", "c"], seed: -1), "c")
+        XCTAssertEqual(CompanionLines.pick(["a", "b", "c"], seed: 739_000), CompanionLines.pick(["a", "b", "c"], seed: 739_000 % 3))
+    }
+
+    func testReplayFollowsTheDay() {
+        var coffee = Nutrients()
+        coffee.caffeineMg = 40  // per 100 ml → 100 mg for 250 ml
+        let entries = [
+            water(500, on: 24, hour: 8),
+            DrinkEntry(timestamp: date(2026, 10, 24, 9), name: "Coffee", category: .coffee, volumeML: 250, nutrientsPer100ml: coffee),
+            water(500, on: 24, hour: 10),
+            DrinkEntry(timestamp: date(2026, 10, 24, 20), name: "Beer", category: .beer, volumeML: 500, alcoholPercent: 5),
+        ]
+        let steps = CompanionLogic.replay(entries: entries.reversed(), goalML: 2000)
+        XCTAssertEqual(steps.map(\.name), ["Water", "Coffee", "Water", "Beer"])
+        XCTAssertEqual(steps.map(\.mood), [.calm, .hyper, .hyper, .tipsy])  // water doesn't cancel the coffee
+        XCTAssertEqual(steps.map(\.moodChanged), [false, true, false, true])
+        XCTAssertEqual(steps[0].progress, 0.25, accuracy: 0.001)
+        XCTAssertTrue(zip(steps, steps.dropFirst()).allSatisfy { $0.progress <= $1.progress })
+        XCTAssertEqual(CompanionLines.replayLine(name: "Coffee", mood: .hyper, moodChanged: true), "Coffee – now I'm hyper!")
+        XCTAssertEqual(CompanionLines.replayLine(name: "Water", mood: .hyper, moodChanged: false), "Water")
+    }
+
+    func testBestDayOfMonth() {
+        var a = DaySummary(day: date(2026, 10, 3)); a.goalFluidML = 2400
+        var b = DaySummary(day: date(2026, 10, 9)); b.goalFluidML = 3100
+        var c = DaySummary(day: date(2026, 10, 1)); c.goalFluidML = 3100  // same amount, earlier: wins
+        XCTAssertEqual(CompanionLogic.bestDay(in: [a, b, c])?.day, date(2026, 10, 1))
+        XCTAssertNil(CompanionLogic.bestDay(in: []))
+        XCTAssertNil(CompanionLogic.bestDay(in: [DaySummary(day: date(2026, 10, 2))]))
     }
 }

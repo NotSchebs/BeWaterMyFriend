@@ -20,18 +20,30 @@ struct AddDrinkView: View {
         return d
     }
     @State private var search = ""
+    @AppStorage(SettingsKey.companionEnabled) private var companionEnabled = SettingsDefault.companionEnabled
+    @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
+    @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
 
     var body: some View {
         NavigationStack {
+            let results = DrinkSearch.results(query: search, presets: presets, entries: entries)
             List {
+                if companionEnabled {
+                    Section {
+                        AddDrinkCompanion(query: search.trimmingCharacters(in: .whitespaces), hasResults: !results.isEmpty,
+                                          usual: search.isEmpty ? DrinkSuggestion.usual(entries: entries, now: .now, calendar: .current) : nil,
+                                          belt: Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0)),
+                                          onPick: { pick(Self.draft(from: $0)) })
+                    }
+                }
                 Section {
                     Button { finish(onNew) } label: { Label("New drink", systemImage: "square.and.pencil") }
                     Button { finish(onScan) } label: { Label("Scan a barcode", systemImage: "barcode.viewfinder") }
                 }
 
-                let results = DrinkSearch.results(query: search, presets: presets, entries: entries)
                 Section(search.isEmpty ? "Your drinks" : "Results") {
-                    if results.isEmpty {
+                    // While searching, the drop already says nothing matched.
+                    if results.isEmpty && (search.isEmpty || !companionEnabled) {
                         Text(search.isEmpty ? "Drinks you save or log show up here." : "No drink called \"\(search)\" yet.")
                             .foregroundStyle(.secondary)
                     }
@@ -82,6 +94,87 @@ struct AddDrinkView: View {
     private func pick(_ draft: DrinkDraft) {
         dismiss()
         onPick(draft)
+    }
+
+    /// A past drink as a new draft for now.
+    static func draft(from entry: DrinkEntry) -> DrinkDraft {
+        var draft = DrinkDraft(entry: entry)
+        draft.source = entry.source
+        draft.barcode = entry.barcode
+        draft.timestamp = .now
+        return draft
+    }
+}
+
+/// The drop on the Add drink screen. Idle, it suggests the drink you usually
+/// have around this time (tap it to log); while you search it sweeps its
+/// magnifying glass, and shrugs when nothing matches.
+struct AddDrinkCompanion: View {
+    var query: String
+    var hasResults: Bool
+    var usual: DrinkEntry?
+    var belt: Belt
+    var onPick: (DrinkEntry) -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweeping = false
+
+    private enum Phase { case idle, searching, notFound }
+
+    private var phase: Phase {
+        if query.isEmpty { return .idle }
+        return hasResults ? .searching : .notFound
+    }
+
+    var body: some View {
+        let seed = CompanionLines.daySeed(.now, calendar: .current)
+        HStack(spacing: 10) {
+            ZStack {
+                NinjaDrop(progress: 0.55, belt: belt,
+                          layers: usual.map { [FillLayer(tint: $0.category.tint, fraction: 0.55)] },
+                          mood: phase == .idle ? (usual.map { CompanionLogic.mood(for: $0.category.tint) } ?? .calm) : .calm)
+                    .frame(width: 44, height: 58)
+                    .rotationEffect(.degrees(phase == .notFound ? -12 : 0), anchor: .bottom)
+                if phase == .searching {
+                    MagnifyingGlass()
+                        .frame(width: 26, height: 26)
+                        .rotationEffect(.degrees(sweeping ? 10 : -10))
+                        .offset(x: sweeping ? 14 : -6, y: sweeping ? 13 : 9)
+                        .animation(.easeInOut(duration: 1.3).repeatForever(), value: sweeping)
+                        .transition(.scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity))
+                } else if phase == .notFound {
+                    Image(systemName: "questionmark")
+                        .font(.title3.bold())
+                        .foregroundStyle(.orange)
+                        .offset(x: 30, y: -24)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            .animation(.spring(duration: 0.35), value: phase)
+            .padding(.leading, 4)
+            .padding(.trailing, 16)
+
+            SpeechBubble(text: text(seed: seed))
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 4)
+        .contentShape(.rect)
+        // Tapping the drop or its bubble logs the usual drink (via the editor, as always).
+        .onTapGesture { if phase == .idle, let usual { onPick(usual) } }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(phase == .idle && usual != nil ? .isButton : [])
+        // Started one run loop after appearing (see ScanCompanion: avoids the jumping drop).
+        .onAppear { Task { @MainActor in sweeping = !reduceMotion } }
+    }
+
+    private func text(seed: Int) -> String {
+        switch phase {
+        case .idle:
+            guard let usual else { return CompanionLines.addIdle(seed: seed) }
+            return CompanionLines.addSuggestion(name: usual.name, ml: usual.volumeML, seed: seed)
+        case .searching: return CompanionLines.addSearching(query)
+        case .notFound: return CompanionLines.addNotFound(query)
+        }
     }
 }
 

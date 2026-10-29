@@ -172,25 +172,88 @@ enum CompanionLogic {
 
     /// How the drop looks for a whole past day (History): the day's "headline".
     static func dayMood(_ day: DaySummary) -> CompanionMood {
-        if day.standardDrinks >= drunkStandardDrinks { return .drunk }
-        if day.standardDrinks >= tipsyStandardDrinks { return .tipsy }
-        if day.caffeineMg >= 200 { return .hyper }
+        dayMood(standardDrinks: day.standardDrinks, caffeineMg: day.caffeineMg)
+    }
+
+    static func dayMood(standardDrinks: Double, caffeineMg: Double) -> CompanionMood {
+        if standardDrinks >= drunkStandardDrinks { return .drunk }
+        if standardDrinks >= tipsyStandardDrinks { return .tipsy }
+        if caffeineMg >= 200 { return .hyper }
         return .calm
     }
 
     /// The drop's one or two sentences about a past day.
-    static func dayCaption(_ day: DaySummary, goalML: Double) -> String {
+    static func dayCaption(_ day: DaySummary, goalML: Double, seed: Int = 0) -> String {
         var parts: [String] = []
+        let amount = Format.ml(day.goalFluidML)
         if day.goalReached(goalML: goalML) {
-            parts.append("Goal reached with \(Format.ml(day.goalFluidML)). Well trained!")
+            parts.append(CompanionLines.pick(["Goal reached with \(amount). Well trained!",
+                                              "\(amount), goal reached. A good day in the dojo!",
+                                              "We made it: \(amount). Osu!"], seed: seed))
         } else {
-            parts.append("\(Format.ml(max(goalML - day.goalFluidML, 0))) short of the goal.")
+            let missing = Format.ml(max(goalML - day.goalFluidML, 0))
+            parts.append(CompanionLines.pick(["\(missing) short of the goal.",
+                                              "Only \(missing) missing to the goal.",
+                                              "\(missing) away from the goal. Next time!"], seed: seed))
         }
         if day.standardDrinks >= drunkStandardDrinks {
-            parts.append("A party day: \(Format.standardDrinks(day.standardDrinks)) std. drinks.")
+            let std = Format.standardDrinks(day.standardDrinks)
+            parts.append(CompanionLines.pick(["A party day: \(std) std. drinks.", "\(std) std. drinks… my head still spins."], seed: seed))
         } else if day.caffeineMg >= 200 {
-            parts.append("Lots of caffeine: \(Format.mg(day.caffeineMg)).")
+            let mg = Format.mg(day.caffeineMg)
+            parts.append(CompanionLines.pick(["Lots of caffeine: \(mg).", "\(mg) caffeine. I was buzzing!"], seed: seed))
         }
         return parts.joined(separator: " ")
+    }
+
+    /// One step of the day replay: how the drop looked right after a drink.
+    struct ReplayStep: Equatable {
+        var time: Date
+        var name: String
+        var progress: Double
+        var layers: [FillLayer]
+        var mood: CompanionMood
+        /// The mood is different from the step before (or from calm, for the first).
+        var moodChanged: Bool
+    }
+
+    /// The day drink by drink, oldest first. Each step uses the same rules as the
+    /// Today screen at the moment of that drink, so the replay shows exactly what
+    /// the drop did that day.
+    static func replay(entries: [DrinkEntry], goalML: Double) -> [ReplayStep] {
+        let sorted = entries.sorted { $0.timestamp < $1.timestamp }
+        var steps: [ReplayStep] = []
+        var previous = CompanionMood.calm
+        var fluid = 0.0
+        for (i, entry) in sorted.enumerated() {
+            let soFar = Array(sorted[...i])
+            fluid += entry.hydrationML
+            let mood = mood(entries: soFar, now: entry.timestamp)
+            steps.append(ReplayStep(time: entry.timestamp, name: entry.name,
+                                    progress: goalML > 0 ? fluid / goalML : 0,
+                                    layers: fillLayers(entries: soFar, goalML: goalML),
+                                    mood: mood, moodChanged: mood != previous))
+            previous = mood
+        }
+        return steps
+    }
+
+    /// The day with the most fluid toward the goal (the earliest on a tie); nil
+    /// when no day has any.
+    static func bestDay(in days: [DaySummary]) -> DaySummary? {
+        days.filter { $0.goalFluidML > 0 }
+            .sorted { $0.day < $1.day }
+            .max { $0.goalFluidML < $1.goalFluidML }
+    }
+
+    /// The drop's face for a colour group (Stats donut): what that drink does.
+    static func mood(for tint: DrinkTint) -> CompanionMood {
+        switch tint {
+        case .coffee, .energy: .hyper
+        case .beer, .wine, .spirits: .tipsy
+        case .milk: .strong
+        case .electrolytes: .charged
+        case .water, .tea, .juice, .soda: .calm
+        }
     }
 }

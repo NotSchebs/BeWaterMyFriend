@@ -39,7 +39,7 @@ enum EditorMode: Identifiable {
 }
 
 /// One form for entries and presets. Works on a `DrinkDraft` copy, so Cancel
-/// discards everything and only Save writes to the database.
+/// discards everything and only Add / Save writes to the database.
 struct DrinkEditorView: View {
     let mode: EditorMode
 
@@ -54,11 +54,15 @@ struct DrinkEditorView: View {
     @AppStorage(SettingsKey.dojoBestGoalDays) private var bestGoalDays = 0
     @AppStorage(SettingsKey.prestigeBaseGoalDays) private var prestigeBase = 0
     @AppStorage(SettingsKey.prestigeLevel) private var prestigeLevel = 0
-    /// Drinks of the last few hours, for the mood preview (no full history).
+    @AppStorage(SettingsKey.dailyGoalML) private var goalML = SettingsDefault.dailyGoalML
+    /// Today and the days you can still log for, for the preview (no full history).
     @Query(filter: DrinkEditorView.recentFilter()) private var recentEntries: [DrinkEntry]
+    /// Plays the gulp when the amount or type changes.
+    @State private var reaction = 0
 
     private static func recentFilter() -> Predicate<DrinkEntry> {
-        let since = Date.now.addingTimeInterval(-4 * 3600)
+        let calendar = Calendar.current
+        let since = calendar.date(byAdding: .day, value: -(LogTimeLimit.daysBack + 1), to: calendar.startOfDay(for: .now)) ?? .now
         return #Predicate { $0.timestamp >= since }
     }
 
@@ -167,7 +171,8 @@ struct DrinkEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { trySave() }
+                    // "Add" when logging a new drink, "Save" when changing something saved.
+                    Button(mode.isNew && !mode.isPreset ? "Add" : "Save") { trySave() }
                         .disabled(!draft.isValid)
                 }
             }
@@ -241,31 +246,50 @@ struct DrinkEditorView: View {
         }
     }
 
-    /// The drop previews this drink: its colour, and the mood it would cause.
+    /// The drop previews this drink live: the day's drop with this drink poured
+    /// in (colour, fill, size), the mood it would cause at the drink's time, and
+    /// where it gets you. It gulps whenever the amount or type changes.
     private var preview: some View {
         let editing: DrinkEntry? = if case .editEntry(let entry) = mode { entry } else { nil }
+        let boundary = DayBoundary(dayEndMinutes: dayEndMinutes)
+        let interval = boundary.interval(forLogicalDay: boundary.logicalDay(for: draft.timestamp))
         let others = recentEntries.filter { $0.persistentModelID != editing?.persistentModelID }
-        let now = Date.now
-        let before = CompanionLogic.moodState(entries: others, now: now).mood
-        let after = CompanionLogic.moodState(entries: others + [draft.makeEntry()], now: now).mood
+        let dayOthers = others.filter { interval.start <= $0.timestamp && $0.timestamp < interval.end }
+        let drink = draft.makeEntry()
+        let before = CompanionLogic.moodState(entries: others, now: draft.timestamp).mood
+        let after = CompanionLogic.moodState(entries: others + [drink], now: draft.timestamp).mood
         let belt = Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0))
         let ml = DrinkMath.hydrationML(volumeML: draft.volumeML, percent: draft.effectiveHydrationPercent)
-        return HStack(spacing: 16) {
-            NinjaDrop(progress: 0.55, belt: belt, layers: [FillLayer(tint: draft.category.tint, fraction: 0.55)],
-                      mood: after, prestige: prestigeLevel)
-                .frame(width: 44, height: 58)
-                .padding(.trailing, 12)
-            Text(Self.previewText(before: before, after: after, ml: ml))
-                .font(.callout)
+        let progressBefore = goalML > 0 ? dayOthers.reduce(0) { $0 + $1.hydrationML } / goalML : 0
+        let progressAfter = goalML > 0 ? progressBefore + ml / goalML : 0
+        return HStack(spacing: 10) {
+            NinjaDrop(progress: progressAfter, belt: belt,
+                      layers: CompanionLogic.fillLayers(entries: dayOthers + [drink], goalML: goalML),
+                      mood: after, prestige: prestigeLevel, reaction: reaction)
+                .frame(width: 52, height: 68)
+                .padding(.leading, 4)
+                .padding(.trailing, 16)
+            SpeechBubble(text: Self.previewText(before: before, after: after, ml: ml,
+                                                progressBefore: progressBefore, progressAfter: progressAfter))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .onChange(of: draft.volumeML) { reaction += 1 }
+        .onChange(of: draft.category) { reaction += 1 }
     }
 
-    static func previewText(before: CompanionMood, after: CompanionMood, ml: Double) -> String {
+    /// With `progressBefore`/`progressAfter` (share of the goal) it also says
+    /// where this drink gets you, or that it reaches the goal.
+    static func previewText(before: CompanionMood, after: CompanionMood, ml: Double,
+                            progressBefore: Double? = nil, progressAfter: Double? = nil) -> String {
         guard after != before else {
-            return ml > 0 ? "This adds \(Format.ml(ml)) toward your goal." : "This won't count toward your goal."
+            guard ml > 0 else { return "This won't count toward your goal." }
+            if let progressBefore, let progressAfter {
+                if progressBefore < 1 && progressAfter >= 1 { return "This gets us to the goal! Osu!" }
+                if progressAfter < 1 { return "+\(Format.ml(ml)). We'd be at \(Format.percent(progressAfter))." }
+            }
+            return "This adds \(Format.ml(ml)) toward your goal."
         }
         switch after {
         case .drunk: return "Whoa, this would make me properly drunk. Maybe a water first?"

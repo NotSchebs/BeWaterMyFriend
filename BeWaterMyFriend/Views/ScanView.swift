@@ -152,51 +152,51 @@ struct ScanView: View {
     }
 }
 
-/// The ninja drop on the scan screen: looks around while searching, gives a
-/// thumbs-up when found, shrugs when nothing was found or there's no internet.
+/// The ninja drop on the scan screen: sweeps a magnifying glass over its eyes
+/// while searching, gives a thumbs-up when found, lowers the glass and shrugs
+/// when nothing was found or there's no internet.
 struct ScanCompanion: View {
     enum Phase { case searching, found, confused }
     var phase: Phase
     var belt: Belt
-    @State private var look = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweeping = false
 
     var body: some View {
         HStack(spacing: 14) {
-            NinjaDrop(progress: phase == .found ? 1 : 0.4, belt: belt, mood: .calm)
-                .frame(width: 44, height: 58)
-                .rotationEffect(.degrees(phase == .searching ? (look ? 10 : -10) : (phase == .confused ? -12 : 0)), anchor: .bottom)
-                .animation(phase == .searching ? .easeInOut(duration: 1.2).repeatForever() : .spring, value: look)
-                .animation(.spring, value: phase)
-                .overlay(alignment: .topTrailing) {
-                    Image(systemName: symbol)
+            ZStack {
+                NinjaDrop(progress: phase == .found ? 1 : 0.4, belt: belt, mood: .calm)
+                    .frame(width: 44, height: 58)
+                    // Tilts its head when confused.
+                    .rotationEffect(.degrees(phase == .confused ? -12 : 0), anchor: .bottom)
+
+                if phase == .searching {
+                    // Held in front of the eyes, sweeping from side to side.
+                    MagnifyingGlass()
+                        .frame(width: 26, height: 26)
+                        .rotationEffect(.degrees(sweeping ? 10 : -10))
+                        .offset(x: sweeping ? 14 : -6, y: sweeping ? 13 : 9)
+                        .animation(.easeInOut(duration: 1.3).repeatForever(), value: sweeping)
+                        .transition(.scale(scale: 0.3, anchor: .bottomTrailing).combined(with: .opacity))
+                } else {
+                    Image(systemName: phase == .found ? "hand.thumbsup.fill" : "questionmark")
                         .font(.title3.bold())
-                        .foregroundStyle(color)
-                        .offset(x: 18, y: -6)
-                        .contentTransition(.symbolEffect(.replace))
+                        .foregroundStyle(phase == .found ? .green : .orange)
+                        .offset(x: 30, y: -24)
+                        .transition(.scale.combined(with: .opacity))
                 }
-                .padding(.trailing, 18)
+            }
+            .animation(.spring(duration: 0.35), value: phase)
+            .padding(.trailing, 18)
             Text(text)
                 .font(.callout)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear { look = true }
+        // Start the sweep one run loop after appearing: a repeating animation that
+        // starts while the sheet is still laying out also repeats the layout move,
+        // which made the drop jump up and down the screen (bug found 27 Oct).
+        .onAppear { Task { @MainActor in sweeping = !reduceMotion } }
         .accessibilityElement(children: .combine)
-    }
-
-    private var symbol: String {
-        switch phase {
-        case .searching: "magnifyingglass"
-        case .found: "hand.thumbsup.fill"
-        case .confused: "questionmark"
-        }
-    }
-
-    private var color: Color {
-        switch phase {
-        case .searching: Dojo.ink
-        case .found: .green
-        case .confused: .orange
-        }
     }
 
     private var text: String {
@@ -205,6 +205,34 @@ struct ScanCompanion: View {
         case .found: "Found it!"
         case .confused: "Hmm, I couldn't find that one."
         }
+    }
+}
+
+/// A magnifying glass: a slightly shiny lens on a wooden handle.
+struct MagnifyingGlass: View {
+    var body: some View {
+        GeometryReader { geo in
+            let d = geo.size.width * 0.68
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(Color.brown)
+                    .overlay(Capsule().stroke(Dojo.ink, lineWidth: 1))
+                    .frame(width: d * 0.22, height: d * 0.62)
+                    .rotationEffect(.degrees(-45), anchor: .top)
+                    .offset(x: d * 0.83, y: d * 0.83)
+                Circle()
+                    .fill(Color.white.opacity(0.35))
+                    .overlay(alignment: .topLeading) {
+                        Capsule().fill(.white.opacity(0.8))
+                            .frame(width: d * 0.14, height: d * 0.3)
+                            .rotationEffect(.degrees(35))
+                            .offset(x: d * 0.22, y: d * 0.14)
+                    }
+                    .overlay(Circle().stroke(Dojo.ink, lineWidth: 2.2))
+                    .frame(width: d, height: d)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

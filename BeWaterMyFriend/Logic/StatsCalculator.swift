@@ -118,42 +118,82 @@ enum StatsCalculator {
     }
 }
 
-/// The ninja drop's one-sentence reading of the Stats charts. Picks the most
-/// notable thing; nil when there's too little data to say anything honest.
+/// The ninja drop's one-sentence reading of the Stats charts, plus where in the
+/// charts the drop stands while saying it. Picks the most notable thing; nil
+/// when there's too little data to say anything honest.
 enum StatsInsight {
-    static func sentence(report: StatsReport, entries: [DrinkEntry], calendar: Calendar) -> String? {
-        let logged = report.points.filter { $0.ml != nil }
-        guard logged.count >= 3 else { return nil }
+    /// The spot the sentence is about.
+    enum Target: Equatable {
+        /// A bar in the daily chart.
+        case daily(Date)
+        /// A bar in the weekday chart (1 = Sunday … 7 = Saturday).
+        case weekday(Int)
+        /// A bar in the caffeine chart.
+        case caffeine(Date)
+    }
 
-        // 1. Weekends vs weekdays (needs both).
-        let weekend = logged.filter { calendar.isDateInWeekend($0.day) }.compactMap(\.ml)
+    struct Result: Equatable {
+        var text: String
+        var target: Target
+    }
+
+    static func sentence(report: StatsReport, entries: [DrinkEntry], calendar: Calendar, seed: Int = 0) -> String? {
+        make(report: report, entries: entries, calendar: calendar, seed: seed)?.text
+    }
+
+    static func make(report: StatsReport, entries: [DrinkEntry], calendar: Calendar, seed: Int = 0) -> Result? {
+        let logged = report.points.filter { $0.ml != nil }
+        guard logged.count >= 3, let lastLogged = logged.last else { return nil }
+
+        // 1. Weekends vs weekdays (needs both). The drop stands on the weekend
+        // day that shows the difference most.
+        let weekendPoints = logged.filter { calendar.isDateInWeekend($0.day) }
+        let weekend = weekendPoints.compactMap(\.ml)
         let weekday = logged.filter { !calendar.isDateInWeekend($0.day) }.compactMap(\.ml)
         if weekend.count >= 1, weekday.count >= 2 {
             let we = weekend.reduce(0, +) / Double(weekend.count)
             let wd = weekday.reduce(0, +) / Double(weekday.count)
             let diff = (we - wd) / wd * 100
             if abs(diff) >= 15 {
-                return "You drink \(Int(abs(diff).rounded())) % \(diff < 0 ? "less" : "more") on weekends than on weekdays."
+                let n = Int(abs(diff).rounded())
+                let averages = StatsCalculator.weekdays(weekendPoints, calendar: calendar)
+                let spot = diff < 0 ? averages.min { $0.averageML < $1.averageML } : averages.max { $0.averageML < $1.averageML }
+                let text = diff < 0
+                    ? CompanionLines.pick(["You drink \(n) % less on weekends than on weekdays.",
+                                           "Weekends are dry: \(n) % less than on weekdays.",
+                                           "On weekends I get \(n) % less. Thirsty!"], seed: seed)
+                    : CompanionLines.pick(["You drink \(n) % more on weekends than on weekdays.",
+                                           "Weekends flow: \(n) % more than on weekdays."], seed: seed)
+                if let spot { return Result(text: text, target: .weekday(spot.weekday)) }
             }
         }
 
-        // 2. Clear trend against the period before.
+        // 2. Clear trend against the period before: on the latest logged day.
         if let change = report.averageChangePercent, abs(change) >= 10 {
-            return change > 0
-                ? "Up \(Int(change.rounded())) % compared with before. Keep flowing!"
-                : "Down \(Int((-change).rounded())) % compared with before. Let's catch up together."
+            let n = Int(abs(change).rounded())
+            let text = change > 0
+                ? CompanionLines.pick(["Up \(n) % compared with before. Keep flowing!",
+                                       "\(n) % more than before. I'm growing!"], seed: seed)
+                : CompanionLines.pick(["Down \(n) % compared with before. Let's catch up together.",
+                                       "\(n) % less than before. I'm a bit thirsty."], seed: seed)
+            return Result(text: text, target: .daily(lastLogged.day))
         }
 
-        // 3. Late caffeine.
+        // 3. Late caffeine: on the day with the most caffeine.
         let start = report.points.first?.day ?? .distantPast
         let caffeine = entries.filter { $0.timestamp >= start && $0.caffeineMg > 0 }
         let total = caffeine.reduce(0) { $0 + $1.caffeineMg }
         let late = caffeine.filter { calendar.component(.hour, from: $0.timestamp) >= 16 }.reduce(0) { $0 + $1.caffeineMg }
-        if total >= 100, late / total >= 0.5 {
-            return "Most of your caffeine comes after 4 pm. Might be worth an earlier coffee."
+        if total >= 100, late / total >= 0.5, let peak = report.points.max(by: { $0.caffeineMg < $1.caffeineMg }) {
+            let text = CompanionLines.pick(["Most of your caffeine comes after 4 pm. Might be worth an earlier coffee.",
+                                            "Lots of late coffee: most caffeine after 4 pm. Sleeping well?"], seed: seed)
+            return Result(text: text, target: .caffeine(peak.day))
         }
 
-        // 4. Goal rate.
-        return "You reached your goal on \(report.goalDays) of \(logged.count) logged days."
+        // 4. Goal rate: on the latest goal day (or the latest logged day).
+        let spot = logged.last(where: \.goalReached) ?? lastLogged
+        let text = CompanionLines.pick(["You reached your goal on \(report.goalDays) of \(logged.count) logged days.",
+                                        "\(report.goalDays) goal days out of \(logged.count). Osu!"], seed: seed)
+        return Result(text: text, target: .daily(spot.day))
     }
 }
