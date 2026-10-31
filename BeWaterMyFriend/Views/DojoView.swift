@@ -151,8 +151,23 @@ struct BeltEarnedView: View {
     var belt: Belt
     @Environment(\.dismiss) private var dismiss
     @State private var appear = false
+    /// Black belt only: after the congratulations, the drop passes on the quote.
+    @State private var showQuote = false
 
     var body: some View {
+        Group {
+            if showQuote {
+                BlackBeltQuoteView { dismiss() }
+                    .transition(.opacity)
+            } else {
+                congratulations
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Dojo.paper)
+    }
+
+    private var congratulations: some View {
         VStack(spacing: 20) {
             Spacer()
             ZStack {
@@ -171,9 +186,13 @@ struct BeltEarnedView: View {
                 .foregroundStyle(.secondary)
             Spacer()
             Button {
-                dismiss()
+                if belt == .black {
+                    withAnimation(.easeInOut(duration: 0.4)) { showQuote = true }
+                } else {
+                    dismiss()
+                }
             } label: {
-                Text("Keep flowing")
+                Text(belt == .black ? "Continue" : "Keep flowing")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -181,11 +200,93 @@ struct BeltEarnedView: View {
             .padding(.horizontal)
         }
         .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Dojo.paper)
         .sensoryFeedback(.success, trigger: appear)
         .onAppear {
             withAnimation(.spring(duration: 0.8, bounce: 0.5)) { appear = true }
+        }
+    }
+}
+
+/// After the black belt congratulations: one centered line fades in and out, then
+/// the quote fades in. The drop sits at the bottom. Tapping skips to the quote.
+struct BlackBeltQuoteView: View {
+    var onDone: () -> Void
+
+    private enum Phase { case line, quote }
+
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @State private var phase = Phase.line
+    @State private var textVisible = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Group {
+                switch phase {
+                case .line:
+                    Text(CompanionLines.blackBeltLine)
+                        .font(.title2.weight(.semibold))
+                case .quote:
+                    VStack(spacing: 16) {
+                        Text(CompanionLines.bruceLeeQuote)
+                            // A named font: the app's rounded design would override a system serif.
+                            .font(.custom("Georgia-Italic", size: 21, relativeTo: .title3))
+                            .lineSpacing(6)
+                        Text("— Bruce Lee")
+                            .font(.custom("Georgia", size: 15, relativeTo: .subheadline))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .multilineTextAlignment(.center)
+            .minimumScaleFactor(0.6)
+            .padding(.horizontal, 12)
+            .opacity(textVisible ? 1 : 0)
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            Spacer()
+
+            NinjaDrop(progress: 1, belt: .black)
+                .frame(width: 84, height: 110)
+                .padding(.trailing, 14)  // the tails stick out to the right
+
+            Button(action: onDone) {
+                Text("Keep flowing")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .padding(.horizontal)
+            // Reserves its place from the start, so nothing shifts when it appears.
+            .opacity(phase == .quote && textVisible ? 1 : 0)
+            .disabled(phase != .quote)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(.rect)
+        .onTapGesture { showQuote() }
+        .task(id: phase) { await play() }
+    }
+
+    private func showQuote() {
+        guard phase != .quote else { return }
+        textVisible = false
+        phase = .quote
+    }
+
+    private func play() async {
+        switch phase {
+        case .line:
+            // VoiceOver reads at its own pace, so it goes straight to the quote.
+            if voiceOver { showQuote(); return }
+            withAnimation(.easeIn(duration: 0.8)) { textVisible = true }
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.7)) { textVisible = false }
+            try? await Task.sleep(for: .seconds(0.8))
+            guard !Task.isCancelled else { return }
+            showQuote()
+        case .quote:
+            withAnimation(.easeIn(duration: 1.2)) { textVisible = true }
         }
     }
 }

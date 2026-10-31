@@ -69,20 +69,7 @@ struct CompanionView: View {
     }
 
     private var message: String {
-        switch mood {
-        case .drunk: return "Whoa… the room is spinning. Water break?"
-        case .tipsy: return "Feeling a bit wobbly… hic!"
-        case .hyper: return "Caffeine rush! Zoom zoom!"
-        case .strong: return "Protein power! Feeling strong."
-        case .charged: return "Fully charged with electrolytes!"
-        case .calm: break
-        }
-        switch progress {
-        case ..<0.01: return "Your training begins. One sip at a time."
-        case ..<0.5: return "Flow like water, my friend."
-        case ..<1: return "More than halfway. Keep flowing."
-        default: return "Goal reached. Well trained!"
-        }
+        CompanionLines.todayMessage(mood: mood, progress: progress)
     }
 }
 

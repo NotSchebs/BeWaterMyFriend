@@ -21,7 +21,10 @@ struct ScanView: View {
     private enum LookupState: Equatable {
         case idle
         case looking(String)
-        case failed(String)
+        /// The lookup found nothing usable for this barcode.
+        case notFound(String)
+        /// `code` is set when the barcode itself is fine, so it can be entered manually.
+        case failed(String, code: String?)
     }
 
     private var cameraAvailable: Bool {
@@ -75,10 +78,25 @@ struct ScanView: View {
                     .multilineTextAlignment(.center)
                 case .looking(let code):
                     ProgressView("Looking up \(code)…")
-                case .failed(let message):
-                    Label(message, systemImage: "exclamationmark.triangle")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
+                case .notFound(let code):
+                    VStack(spacing: 8) {
+                        Text("Drink not found")
+                            .font(.headline)
+                        Text("Barcode \(code) isn't in Open Food Facts yet, or has no usable data. Enter it once and it will be remembered for this barcode.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        manualEntryButton(DrinkDraft(unknownBarcode: code))
+                    }
+                case .failed(let message, let code):
+                    VStack(spacing: 8) {
+                        Label(message, systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+                        if let code {
+                            manualEntryButton(DrinkDraft(unknownBarcode: code, offline: true))
+                        }
+                    }
                 }
                 Spacer()
             }
@@ -94,6 +112,11 @@ struct ScanView: View {
         }
     }
 
+    private func manualEntryButton(_ draft: DrinkDraft) -> some View {
+        Button("Enter it manually", systemImage: "square.and.pencil") { finishNow(draft) }
+            .buttonStyle(.borderedProminent)
+    }
+
     private var isLooking: Bool {
         if case .looking = state { return true }
         return false
@@ -102,7 +125,7 @@ struct ScanView: View {
     private func lookUp(_ code: String) {
         guard !isLooking else { return }
         guard OpenFoodFacts.isValidBarcode(code) else {
-            state = .failed(ProductLookup.LookupError.invalidBarcode.localizedDescription)
+            state = .failed(ProductLookup.LookupError.invalidBarcode.localizedDescription, code: nil)
             return
         }
         fieldFocused = false
@@ -117,13 +140,14 @@ struct ScanView: View {
         state = .looking(code)
         Task {
             do {
-                if let product = try await ProductLookup.fetch(barcode: code) {
+                if let product = try await ProductLookup.fetch(barcode: code), product.hasUsableData {
                     finish(DrinkDraft(scanned: product))
                 } else {
-                    finish(DrinkDraft(unknownBarcode: code))
+                    // Never a silent fallback: the user sees it and decides.
+                    state = .notFound(code)
                 }
             } catch {
-                state = .failed(error.localizedDescription)
+                state = .failed(error.localizedDescription, code: code)
             }
         }
     }
@@ -132,7 +156,7 @@ struct ScanView: View {
         if found { return .found }
         switch state {
         case .idle, .looking: return .searching
-        case .failed: return .confused
+        case .notFound, .failed: return .confused
         }
     }
 

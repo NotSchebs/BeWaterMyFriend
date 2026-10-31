@@ -86,6 +86,31 @@ final class CompanionCaptionTests: XCTestCase {
         XCTAssertEqual(StatsInsight.make(report: r2, entries: late, calendar: zurich)?.target, .caffeine(date(2026, 10, 24)))
     }
 
+    /// Every wording, for every kind of line: the drop never talks about what's "in" it.
+    func testNoLineSaysSomethingIsInTheDrop() {
+        var lines: [String] = []
+        for seed in 0..<8 {
+            for ml in [nil, 1000.0, 2500.0] {
+                lines.append(CompanionLines.statsDay(ml: ml, goalML: 2000, dayText: "Fri", seed: seed))
+            }
+            lines.append(CompanionLines.statsCaffeine(mg: seed.isMultiple(of: 2) ? 0 : 100, dayText: "Fri", seed: seed))
+            lines.append(CompanionLines.statsAlcohol(standardDrinks: seed.isMultiple(of: 2) ? 0 : 2, dayText: "Fri", seed: seed))
+            lines.append(CompanionLines.statsWeekday(ml: 1800, weekdayText: "Saturday", seed: seed))
+            lines.append(CompanionLines.statsDrinkType(name: "Water", ml: 1000, share: 0.5, seed: seed))
+        }
+        XCTAssertGreaterThanOrEqual(Set(lines).count, 25)
+        for line in lines {
+            XCTAssertFalse(line.lowercased().contains("in me"), line)
+        }
+    }
+
+    func testBlackBeltSpeechIsTheFullQuote() {
+        XCTAssertEqual(CompanionLines.bruceLeeQuote,
+                       "Empty your mind. Be formless, shapeless, like water. You put water into a cup, it becomes the cup. "
+                       + "You put water into a bottle, it becomes the bottle. You put it into a teapot, it becomes the teapot. "
+                       + "Now water can flow or it can crash. Be water, my friend.")
+    }
+
     func testWordingVariants() {
         var day = DaySummary(day: date(2026, 10, 24))
         day.goalFluidML = 2500

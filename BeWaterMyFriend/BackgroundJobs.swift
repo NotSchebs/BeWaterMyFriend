@@ -15,10 +15,12 @@ enum BackgroundJobs {
         await GoalService.shared.refresh()
         try? await Task.sleep(for: .seconds(2))
         await ReminderScheduler.shared.reschedule(context: context)
+        WidgetBridge.publish(context: context)
         try? await Task.sleep(for: .seconds(55))
         while !Task.isCancelled {
             await syncHealth(context: context)
             await GoalService.shared.refresh()  // new workouts, a new day (weather is cached)
+            WidgetBridge.publish(context: context)  // does nothing if nothing changed
             try? await Task.sleep(for: .seconds(60))
         }
     }
@@ -26,6 +28,7 @@ enum BackgroundJobs {
     /// After a change, so "Immediately" really is immediate, and reminders know
     /// the new progress and "last drink".
     static func afterSave(context: ModelContext) async {
+        WidgetBridge.publish(context: context)
         await syncHealth(context: context)
         await ReminderScheduler.shared.reschedule(context: context)
     }

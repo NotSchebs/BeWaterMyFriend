@@ -7,6 +7,8 @@ import UserNotifications
 enum QuickAction: Equatable {
     case newDrink
     case scan
+    /// The Add drink screen, which offers New drink and Scan (the widgets' "+").
+    case addDrink
 }
 
 /// Tells the UI to open a screen (e.g. after tapping "Scan" on a reminder).

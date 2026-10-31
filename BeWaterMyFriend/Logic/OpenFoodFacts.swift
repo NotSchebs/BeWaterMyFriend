@@ -16,6 +16,12 @@ nonisolated struct ScannedProduct: Equatable, Sendable {
     /// Set for powders (electrolytes, protein): grams per scoop. Then nutrients are
     /// per 100 g of powder and `suggestedVolumeML` is the liquid to mix with.
     var powderGrams: Double? = nil
+
+    /// False when the database knows the barcode but neither a name nor any
+    /// nutrition data: that's no better than "not found".
+    var hasUsableData: Bool { !name.isEmpty || hasNutrients }
+
+    var hasNutrients: Bool { Nutrient.allCases.contains { nutrientsPer100ml[$0] != nil } }
 }
 
 /// Parsing of Open Food Facts product data (https://world.openfoodfacts.org).
@@ -59,7 +65,7 @@ nonisolated enum OpenFoodFacts {
         let tags = product["categories_tags"] as? [String] ?? []
         let name = [product["product_name"] as? String, product["brands"] as? String]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .first { !$0.isEmpty } ?? "Scanned drink"
+            .first { !$0.isEmpty } ?? ""  // never a made-up name: the user types one
 
         // Powders: nutrients are per 100 g of powder; one drink is a scoop plus liquid.
         if let powder = powderCategory(name: name, tags: tags,

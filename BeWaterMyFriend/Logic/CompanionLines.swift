@@ -16,6 +16,26 @@ enum CompanionLines {
         calendar.ordinality(of: .day, in: .era, for: date) ?? 0
     }
 
+    // MARK: Today
+
+    /// What the drop says on the Today screen and the Large widget.
+    static func todayMessage(mood: CompanionMood, progress: Double) -> String {
+        switch mood {
+        case .drunk: return "Whoa… the room is spinning. Water break?"
+        case .tipsy: return "Feeling a bit wobbly… hic!"
+        case .hyper: return "Caffeine rush! Zoom zoom!"
+        case .strong: return "Protein power! Feeling strong."
+        case .charged: return "Fully charged with electrolytes!"
+        case .calm: break
+        }
+        switch progress {
+        case ..<0.01: return "Your training begins. One sip at a time."
+        case ..<0.5: return "Flow like water, my friend."
+        case ..<1: return "More than halfway. Keep flowing."
+        default: return "Goal reached. Well trained!"
+        }
+    }
+
     // MARK: Day replay
 
     static func replayStart(seed: Int) -> String {
@@ -48,29 +68,60 @@ enum CompanionLines {
 
     static func statsDay(ml: Double?, goalML: Double, dayText: String, seed: Int) -> String {
         guard let ml else {
-            return pick(["Nothing logged on \(dayText).", "No data for \(dayText). Was I forgotten?"], seed: seed)
+            return pick(["Nothing logged on \(dayText).",
+                         "No data for \(dayText). Was I forgotten?",
+                         "\(dayText) is a blank page.",
+                         "\(dayText): no entries, no verdict."], seed: seed)
         }
+        let amount = Format.ml(ml)
         if goalML > 0 && ml >= goalML {
-            return pick(["\(dayText): \(Format.ml(ml)). Goal reached!", "\(dayText): \(Format.ml(ml)). Well trained!"], seed: seed)
+            return pick(["\(dayText): \(amount). Goal reached!",
+                         "\(dayText): \(amount). Well trained!",
+                         "\(dayText): \(amount). That's how a ninja trains.",
+                         "\(dayText): \(amount). Flowing like a river that day."], seed: seed)
         }
         let missing = Format.ml(max(goalML - ml, 0))
-        return pick(["\(dayText): \(Format.ml(ml)), \(missing) short.", "\(dayText): \(Format.ml(ml)). \(missing) to go that day."], seed: seed)
+        return pick(["\(dayText): \(amount), \(missing) short.",
+                     "\(dayText): \(amount). \(missing) to go that day.",
+                     "\(dayText): \(amount). Every sip counts, \(missing) more next time.",
+                     "\(dayText): \(amount). A good session, the goal was \(missing) away."], seed: seed)
     }
 
     static func statsCaffeine(mg: Double, dayText: String, seed: Int) -> String {
-        guard mg > 0 else { return pick(["No caffeine on \(dayText).", "\(dayText): no caffeine. A calm day."], seed: seed) }
-        return pick(["\(dayText): \(Format.mg(mg)) caffeine.", "\(dayText): \(Format.mg(mg)) caffeine. Buzz!"], seed: seed)
+        guard mg > 0 else {
+            return pick(["No caffeine on \(dayText).",
+                         "\(dayText): no caffeine. A calm day.",
+                         "\(dayText): no caffeine. Still as a pond.",
+                         "\(dayText): zero buzz, full zen."], seed: seed)
+        }
+        let amount = Format.mg(mg)
+        return pick(["\(dayText): \(amount) caffeine.",
+                     "\(dayText): \(amount) caffeine. Buzz!",
+                     "\(dayText): \(amount) caffeine. Zoom zoom!",
+                     "\(dayText): \(amount) caffeine. My headband was vibrating."], seed: seed)
     }
 
     static func statsAlcohol(standardDrinks: Double, dayText: String, seed: Int) -> String {
-        guard standardDrinks > 0 else { return pick(["No alcohol on \(dayText).", "\(dayText): no alcohol. Clear head!"], seed: seed) }
-        return pick(["\(dayText): \(Format.standardDrinks(standardDrinks)) std. drinks.",
-                     "\(dayText): \(Format.standardDrinks(standardDrinks)) std. drinks. Cheers!"], seed: seed)
+        guard standardDrinks > 0 else {
+            return pick(["No alcohol on \(dayText).",
+                         "\(dayText): no alcohol. Clear head!",
+                         "\(dayText): no alcohol. Sharp as a blade.",
+                         "\(dayText): alcohol-free and steady on my feet."], seed: seed)
+        }
+        let amount = Format.standardDrinks(standardDrinks)
+        return pick(["\(dayText): \(amount) std. drinks.",
+                     "\(dayText): \(amount) std. drinks. Cheers!",
+                     "\(dayText): \(amount) std. drinks. Even ninjas need a day off.",
+                     "\(dayText): \(amount) std. drinks. A glass of water for the road?"], seed: seed)
     }
 
     /// `weekdayText` is the full name ("Saturday").
     static func statsWeekday(ml: Double, weekdayText: String, seed: Int) -> String {
-        pick(["\(weekdayText)s: \(Format.ml(ml)) on average.", "On \(weekdayText)s I usually get \(Format.ml(ml))."], seed: seed)
+        let amount = Format.ml(ml)
+        return pick(["\(weekdayText)s: \(amount) on average.",
+                     "A usual \(weekdayText): \(amount).",
+                     "\(weekdayText)s average out at \(amount). Nice rhythm.",
+                     "\(amount) is your \(weekdayText) routine."], seed: seed)
     }
 
     // MARK: Add drink
@@ -94,7 +145,20 @@ enum CompanionLines {
 
     static func statsDrinkType(name: String, ml: Double, share: Double, seed: Int) -> String {
         let percent = Format.percent(share)
-        return pick(["\(name): \(Format.ml(ml)), \(percent) of what you drank.",
-                     "\(percent) \(name). That's \(Format.ml(ml)) in me!"], seed: seed)
+        let amount = Format.ml(ml)
+        return pick(["\(name): \(amount), \(percent) of what you drank.",
+                     "\(name): \(percent) of the donut. That's \(amount).",
+                     "\(name) has a \(percent) slice: \(amount) in total.",
+                     "\(percent) of your drinks: \(name). Good to know!"], seed: seed)
     }
+
+    // MARK: Black belt
+
+    /// In martial arts the black belt is the beginning, so the screen says so and
+    /// then shows the quote the app is named after.
+    static let blackBeltLine = "Black belt is just the beginning"
+
+    static let bruceLeeQuote = "Empty your mind. Be formless, shapeless, like water. You put water into a cup, it becomes the cup. "
+        + "You put water into a bottle, it becomes the bottle. You put it into a teapot, it becomes the teapot. "
+        + "Now water can flow or it can crash. Be water, my friend."
 }

@@ -14,15 +14,25 @@ struct BeWaterMyFriendApp: App {
             container = PreviewData.container
         } else {
             do {
-                container = try ModelContainer(for: DrinkEntry.self, DrinkPreset.self)
+                container = try ModelContainer(for: DrinkEntry.self, DrinkPreset.self,
+                                               configurations: Self.storeConfiguration)
             } catch {
                 fatalError("Could not open the drink database: \(error)")
             }
             DefaultPresets.seedIfNeeded(in: container.mainContext)
+            if let presets = try? container.mainContext.fetch(FetchDescriptor<DrinkPreset>()),
+               DrinkStars.migrateOldFavourites(presets) {
+                try? container.mainContext.save()
+            }
         }
         notificationHandler = NotificationHandler(container: container)
         UNUserNotificationCenter.current().delegate = notificationHandler
     }
+
+    /// `groupContainer: .none` is essential: with an App Group in the entitlements,
+    /// SwiftData would otherwise silently open a new, empty database in the shared
+    /// folder, and the user's drinks would look gone (found 31 Oct, before release).
+    static let storeConfiguration = ModelConfiguration(groupContainer: .none)
 
     var body: some Scene {
         WindowGroup {
@@ -46,6 +56,11 @@ enum AppEnvironment {
         #else
         false
         #endif
+    }
+
+    /// UI test for the black belt moment, which normally takes months to reach.
+    static var showsBlackBeltForTest: Bool {
+        isUITest && ProcessInfo.processInfo.arguments.contains("-UITestBlackBelt")
     }
 
     /// Wiped at every launch, so each test run starts from the defaults.

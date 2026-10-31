@@ -10,7 +10,7 @@ struct ProgressRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.accentColor.opacity(0.15), lineWidth: lineWidth)
+                .stroke(Dojo.ink.opacity(0.15), lineWidth: lineWidth)
             if let layers, !layers.isEmpty {
                 ForEach(Array(layers.enumerated()), id: \.offset) { index, layer in
                     let start = layers.prefix(index).reduce(0) { $0 + $1.fraction }
@@ -22,7 +22,7 @@ struct ProgressRing: View {
             } else {
                 Circle()
                     .trim(from: 0, to: min(progress, 1))
-                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                    .stroke(Dojo.ink, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                     .rotationEffect(.degrees(-90))
             }
         }
@@ -33,7 +33,7 @@ struct ProgressRing: View {
 extension DrinkTint {
     /// Water uses the app's indigo on the ring so it stands out from the light track.
     var ringColor: Color {
-        self == .water ? .accentColor : color
+        self == .water ? Dojo.ink : color
     }
 }
 

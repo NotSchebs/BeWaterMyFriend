@@ -96,6 +96,49 @@ final class ScanTests: XCTestCase {
         XCTAssertEqual(entry.caffeineMg, 80, accuracy: 0.0001)  // 250 ml × 32 mg/100 ml
     }
 
+    private func parse(_ json: String) throws -> ScannedProduct? {
+        try OpenFoodFacts.parse(Data(json.utf8), barcode: "7610000000017")
+    }
+
+    func testNotFoundIsNil() throws {
+        XCTAssertNil(try parse(#"{"code":"7610000000017","status":0,"status_verbose":"product not found"}"#))
+    }
+
+    func testBarcodeWithoutAnyDataIsNotUsable() throws {
+        let product = try XCTUnwrap(parse(#"{"status":1,"product":{"code":"7610000000017"}}"#))
+        XCTAssertEqual(product.name, "", "no made-up name")
+        XCTAssertFalse(product.hasUsableData)
+    }
+
+    func testNameWithoutDataIsReviewedAndNeverSilentlyWater() throws {
+        let product = try XCTUnwrap(parse(#"{"status":1,"product":{"product_name":"New Drink"}}"#))
+        XCTAssertTrue(product.hasUsableData)
+        XCTAssertEqual(product.category, .other)
+        var draft = DrinkDraft(scanned: product)
+        XCTAssertTrue(draft.needsType)
+        XCTAssertTrue(draft.scanNote?.contains("no nutrition data") == true)
+        XCTAssertFalse(draft.isValid, "can't be added before a type is chosen")
+        draft.category = .softDrink
+        draft.needsType = false
+        XCTAssertTrue(draft.isValid)
+    }
+
+    func testKnownCategoryNeedsNoTypeChoice() throws {
+        let json = #"{"status":1,"product":{"product_name":"Cola","categories_tags":["en:sodas"],"nutriments":{"sugars_100g":10}}}"#
+        let draft = DrinkDraft(scanned: try XCTUnwrap(parse(json)))
+        XCTAssertFalse(draft.needsType)
+        XCTAssertTrue(draft.isValid)
+        XCTAssertTrue(draft.scanNote?.contains("Check the values") == true)
+    }
+
+    func testManualEntryForAnUnknownBarcode() {
+        var draft = DrinkDraft(unknownBarcode: "7610000000017")
+        XCTAssertEqual(draft.barcode, "7610000000017")
+        draft.name = "New Drink"
+        XCTAssertFalse(draft.isValid, "a name alone isn't enough: nothing defaults to water")
+        XCTAssertTrue(DrinkDraft(unknownBarcode: "7610000000017", offline: true).scanNote?.contains("online") == true)
+    }
+
     func testCorrectedPresetIsFoundByBarcode() throws {
         let container = try ModelContainer(for: DrinkEntry.self, DrinkPreset.self,
                                            configurations: ModelConfiguration(isStoredInMemoryOnly: true))

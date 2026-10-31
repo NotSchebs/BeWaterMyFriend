@@ -14,14 +14,16 @@ struct DrinkDraft {
     /// Grams of powder, only used for powder categories.
     var powderGrams: Double?
     var nutrientsPer100ml = Nutrients()
-    var isFavourite = false
     var source: EntrySource = .manual
     var barcode: String?
     /// For scans: what the database said, shown as a hint while reviewing.
     var scanNote: String?
+    /// An unknown drink: `category` is only a placeholder until the user picks a
+    /// type, so nothing silently counts as water.
+    var needsType = false
 
     var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && volumeML > 0
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && volumeML > 0 && !needsType
     }
 
     init() {}
@@ -47,7 +49,12 @@ struct DrinkDraft {
         nutrientsPer100ml = product.nutrientsPer100ml
         source = .scan
         barcode = product.barcode
-        var notes = ["From Open Food Facts. Check the values, especially caffeine, before saving."]
+        needsType = product.category == .other  // the database didn't say what it is
+        var notes = [product.hasNutrients
+            ? "From Open Food Facts. Check the values, especially caffeine, before saving."
+            : "Open Food Facts knows this barcode but has no nutrition data for it. Add values from the label if you like; they'll be remembered for this barcode."]
+        if product.name.isEmpty { notes.append("It has no name there, so please enter one.") }
+        if needsType { notes.append("Please choose the type of drink.") }
         if let package = product.packageVolumeML, package != product.suggestedVolumeML {
             notes.append("Package: \(Int(package)) ml.")
         }
@@ -70,11 +77,15 @@ struct DrinkDraft {
     }
 
     /// Unknown product: the user enters it; it's remembered for next time.
-    init(unknownBarcode barcode: String) {
+    /// `offline`: it couldn't be checked, rather than not being in the database.
+    init(unknownBarcode barcode: String, offline: Bool = false) {
         name = ""
         source = .scan
         self.barcode = barcode
-        scanNote = "Not found in Open Food Facts. Enter it once and it will be remembered for this barcode."
+        needsType = true
+        scanNote = offline
+            ? "Couldn't check this barcode online. Enter the drink once and it will be remembered for this barcode."
+            : "Not found in Open Food Facts. Enter it once and it will be remembered for this barcode."
     }
 
     init(preset: DrinkPreset) {
@@ -85,7 +96,6 @@ struct DrinkDraft {
         hydrationPercent = preset.hydrationPercent
         powderGrams = preset.powderGrams
         nutrientsPer100ml = preset.nutrientsPer100ml
-        isFavourite = preset.isFavourite
         barcode = preset.barcode
     }
 
@@ -132,7 +142,6 @@ struct DrinkDraft {
         preset.hydrationPercent = hydrationPercent
         preset.powderGrams = effectivePowderGrams
         preset.nutrientsPer100ml = nutrientsPer100ml
-        preset.isFavourite = isFavourite
         if let barcode { preset.barcode = barcode }
     }
 
@@ -160,7 +169,6 @@ struct DrinkDraft {
             hydrationPercent: hydrationPercent,
             powderGrams: effectivePowderGrams,
             nutrientsPer100ml: nutrientsPer100ml,
-            isFavourite: isFavourite,
             sortOrder: sortOrder,
             barcode: barcode
         )

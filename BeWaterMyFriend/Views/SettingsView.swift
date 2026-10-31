@@ -294,19 +294,13 @@ struct PresetListView: View {
                     .disabled(!preset.isInQuickLog && QuickLogRules.isFull(presets))
                     .accessibilityLabel(preset.isInQuickLog ? "Remove from Quick log" : "Add to Quick log")
 
-                    Button {
-                        preset.isFavourite.toggle()
-                        try? context.save()
-                    } label: {
-                        Image(systemName: preset.isFavourite ? "star.fill" : "star")
-                            .foregroundStyle(preset.isFavourite ? .yellow : .secondary)
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityLabel(preset.isFavourite ? "Remove from favourites" : "Add to favourites")
+                    StarControl(preset: preset, presets: presets)
                 }
             }
             .onDelete { offsets in
-                offsets.map { presets[$0] }.forEach(context.delete)
+                let deleted = offsets.map { presets[$0] }
+                deleted.forEach(context.delete)
+                DrinkStars.compact(presets.filter { preset in !deleted.contains { $0 === preset } })
                 try? context.save()
             }
             .onMove { from, to in
@@ -320,7 +314,7 @@ struct PresetListView: View {
             } header: {
                 Text("Quick log: \(presets.filter(\.isInQuickLog).count) of \(QuickLogRules.maxItems)")
             } footer: {
-                Text("▦ shows a drink in the Quick log (at most \(QuickLogRules.maxItems)); ★ puts it first. Drinks not in the Quick log are still found with search when you tap +.")
+                Text("▦ shows a drink in the Quick log (at most \(QuickLogRules.maxItems)); drinks not in it are still found with search when you tap +. ★1–★3 are the drinks for the home screen widgets; tap a star to change its number.")
             }
         }
         .dojoBackground()

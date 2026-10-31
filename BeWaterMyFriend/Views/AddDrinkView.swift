@@ -187,28 +187,42 @@ enum DrinkSearch {
         var detail: String
     }
 
+    /// The whole history, newest first, loading only what's needed to tell drinks
+    /// apart (performance). The rest of a drink loads when it's actually used.
+    static func allEntries(in context: ModelContext) -> [DrinkEntry] {
+        var descriptor = FetchDescriptor<DrinkEntry>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        descriptor.propertiesToFetch = [\.name, \.categoryRaw, \.volumeML, \.timestamp]
+        return (try? context.fetch(descriptor)) ?? []
+    }
+
     static func results(query: String, presets: [DrinkPreset], entries: [DrinkEntry], limit: Int = 50) -> [Result] {
         let q = QuickLogRules.normalized(query)
         var seen = Set<String>()
         var out: [Result] = []
 
-        func add(_ draft: DrinkDraft, detail: String) {
-            let key = "\(QuickLogRules.normalized(draft.name))|\(draft.category.rawValue)|\(Int(draft.volumeML))"
-            guard !seen.contains(key) else { return }
-            guard q.isEmpty || QuickLogRules.normalized(draft.name).contains(q)
-                    || draft.category.displayName.lowercased().contains(q) else { return }
-            seen.insert(key)
-            out.append(Result(id: key, draft: draft, detail: detail))
+        func key(_ name: String, _ category: DrinkCategory, _ ml: Double) -> String {
+            "\(QuickLogRules.normalized(name))|\(category.rawValue)|\(Int(ml))"
+        }
+        func matches(_ name: String, _ category: DrinkCategory) -> Bool {
+            q.isEmpty || QuickLogRules.normalized(name).contains(q) || category.displayName.lowercased().contains(q)
         }
 
         for preset in presets {
-            add(DrinkDraft(preset: preset), detail: preset.isInQuickLog ? "In Quick log" : "Saved")
+            let id = key(preset.name, preset.category, preset.volumeML)
+            guard !seen.contains(id), matches(preset.name, preset.category) else { continue }
+            seen.insert(id)
+            out.append(Result(id: id, draft: DrinkDraft(preset: preset), detail: preset.isInQuickLog ? "In Quick log" : "Saved"))
         }
         for entry in entries {
+            let id = key(entry.name, entry.category, entry.volumeML)
+            // Checked before building the draft: decoding nutrients for every
+            // repeat of the same drink would be slow with years of history.
+            guard !seen.contains(id), matches(entry.name, entry.category) else { continue }
+            seen.insert(id)
             var draft = DrinkDraft(entry: entry)
             draft.source = entry.source
             draft.barcode = entry.barcode
-            add(draft, detail: "Last: \(entry.timestamp.formatted(date: .abbreviated, time: .omitted))")
+            out.append(Result(id: id, draft: draft, detail: "Last: \(entry.timestamp.formatted(date: .abbreviated, time: .omitted))"))
         }
         if !q.isEmpty {
             // Names starting with the query first.

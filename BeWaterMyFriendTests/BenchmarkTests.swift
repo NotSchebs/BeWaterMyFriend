@@ -78,6 +78,10 @@ final class BenchmarkTests: XCTestCase {
         let healthStart = Date.now
         let candidates = try context.fetch(HealthSync.candidates(now: .now))
         let healthTime = Date.now.timeIntervalSince(healthStart)
+        // "+" in the Quick log edit mode: every drink ever, each once.
+        let listStart = Date.now
+        let allDrinks = DrinkSearch.results(query: "", presets: [], entries: DrinkSearch.allEntries(in: context), limit: .max)
+        print("BENCHMARK add-to-Quick-log list: \(String(format: "%.3f", Date.now.timeIntervalSince(listStart))) s (\(allDrinks.count) drinks)")
         print("BENCHMARK new: archive once \(String(format: "%.2f", archiveTime)) s, each update \(String(format: "%.3f", updateTime)) s (\(recent.count) drinks), health check \(String(format: "%.3f", healthTime)) s (\(candidates.count) candidates)")
 
         print("""

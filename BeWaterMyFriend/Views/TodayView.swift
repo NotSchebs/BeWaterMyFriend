@@ -35,6 +35,8 @@ struct TodayView: View {
     @State private var showAddDrink = false
     @State private var showAlcoholInfo = false
     @State private var flashedPreset: PersistentIdentifier?
+    @State private var editingQuickLog = false
+    @State private var showAddToQuickLog = false
     private var router = AppRouter.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var loggedCount = 0
@@ -59,6 +61,22 @@ struct TodayView: View {
                     Button("Scan", systemImage: "barcode.viewfinder") { showScanner = true }
                 }
             }
+            // Right under + and Scan, and hard to miss, wherever the list is scrolled.
+            // A real bar, not an overlay: taps on overlays can fall through to list rows.
+            .safeAreaBar(edge: .top) {
+                if editingQuickLog {
+                    HStack {
+                        Spacer()
+                        Button("Done") { withAnimation(.snappy) { editingQuickLog = false } }
+                            .font(.headline)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
             .sheet(item: $editor) { mode in
                 DrinkEditorView(mode: mode)
             }
@@ -78,6 +96,9 @@ struct TodayView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showAddToQuickLog) {
+                AddToQuickLogView(presets: presets) { draft in addToQuickLog(draft) }
+            }
             .fullScreenCover(item: $earnedBelt) { belt in
                 BeltEarnedView(belt: belt)
             }
@@ -85,6 +106,7 @@ struct TodayView: View {
             // Opened from a reminder's "New drink" or "Scan" button (or a link).
             .onChange(of: router.pendingAction, initial: true) { handlePendingAction() }
             .onChange(of: scenePhase) { handlePendingAction() }
+            .onAppear { if AppEnvironment.showsBlackBeltForTest { earnedBelt = .black } }
         }
     }
 
@@ -130,14 +152,29 @@ struct TodayView: View {
             )
 
             Section {
-                QuickLogGrid(presets: sortedPresets, flashed: flashedPreset) { preset in
-                    log(preset)
-                }
+                QuickLogGrid(presets: sortedPresets, allPresets: presets, flashed: flashedPreset, isEditing: $editingQuickLog,
+                             onTap: { log($0) },
+                             onMove: { dragged, target in
+                                 QuickLogRules.move(dragged, onto: target, in: presets)
+                                 try? context.save()
+                             },
+                             onRemove: { preset in
+                                 // Only leaves the grid: still in search and remembered for its barcode.
+                                 withAnimation(.spring(duration: 0.3)) { preset.isInQuickLog = false }
+                                 try? context.save()
+                             },
+                             onAdd: { showAddToQuickLog = true })
                 .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
             } header: {
                 Text("Quick log")
             } footer: {
-                Text("Tap a drink to log it now. Manage presets in Settings.")
+                if editingQuickLog {
+                    Text(QuickLogRules.isFull(presets)
+                         ? "Drag to rearrange, – to remove, ★ for the widgets. The Quick log is full (\(QuickLogRules.maxItems)): remove one to add another."
+                         : "Drag to rearrange, – to remove, + to add, ★ for the widgets.")
+                } else {
+                    Text("Tap a drink to log it now. Long-press to rearrange. Presets are in Settings too.")
+                }
             }
 
             Section("Today's drinks") {
@@ -163,6 +200,8 @@ struct TodayView: View {
         }
         }
         .dojoBackground()
+        // Leaving the tab ends editing, like leaving the iPhone's home screen edit mode.
+        .onDisappear { editingQuickLog = false }
         .sheet(isPresented: $showDojo) {
             DojoView(progress: progress, layers: layers, mood: mood, belt: belt, stats: stats,
                      goalDays: goalDays, prestige: prestigeLevel) {
@@ -243,6 +282,7 @@ struct TodayView: View {
             switch action {
             case .newDrink: editor = .newEntry
             case .scan: showScanner = true
+            case .addDrink: showAddDrink = true
             }
         }
     }
@@ -319,9 +359,20 @@ struct TodayView: View {
         .padding(.vertical, 8)
     }
 
-    /// Favourites first, then the rest in the user's order.
     private var sortedPresets: [DrinkPreset] {
         QuickLogRules.visible(presets)
+    }
+
+    /// From the "+" list: shows the saved preset again, or saves this drink as a new one.
+    private func addToQuickLog(_ draft: DrinkDraft) {
+        let order = QuickLogRules.nextSortOrder(presets)
+        if let existing = QuickLogRules.matching(draft, in: presets) {
+            existing.sortOrder = order
+            existing.isInQuickLog = true
+        } else {
+            context.insert(draft.makePreset(sortOrder: order))
+        }
+        try? context.save()
     }
 
     private func log(_ preset: DrinkPreset) {

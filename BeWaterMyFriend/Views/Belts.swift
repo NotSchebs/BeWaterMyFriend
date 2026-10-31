@@ -82,8 +82,14 @@ extension Belt {
     /// Light belts need dark eyes on the mask.
     var isLight: Bool { self == .white || self == .yellow }
 
-    /// Red belts with white blocks (6th–8th Dan): white eyes need an edge there.
-    var hasWhiteStripes: Bool { self == .dan6 || self == .dan7 || self == .dan8 }
+    /// Dark eyes on light belts and on the red-and-white 6th–8th Dan belts, where
+    /// white eyes would vanish on the white blocks (user's call, 31 Oct).
+    var eyeColor: Color {
+        switch self {
+        case .white, .yellow, .dan6, .dan7, .dan8: Color(white: 0.15)
+        default: .white
+        }
+    }
 
     var color: Color {
         switch self {

@@ -59,10 +59,8 @@ struct NinjaDrop: View {
                     .frame(width: w * 0.92, height: h * 0.17)
                     .offset(y: h * 0.12)
                 HStack(spacing: w * 0.16) {
-                    Eye(style: eyeStyle, color: belt.isLight ? Color(white: 0.15) : .white,
-                        outline: belt.hasWhiteStripes ? Color(white: 0.15) : nil)
-                    Eye(style: eyeStyle, mirrored: true, color: belt.isLight ? Color(white: 0.15) : .white,
-                        outline: belt.hasWhiteStripes ? Color(white: 0.15) : nil)
+                    Eye(style: eyeStyle, color: belt.eyeColor)
+                    Eye(style: eyeStyle, mirrored: true, color: belt.eyeColor)
                 }
                 .frame(width: w * 0.52, height: h * 0.075)
                 .offset(y: h * 0.12)
@@ -244,47 +242,27 @@ private struct Eye: View {
     var style: Style
     var mirrored = false
     var color: Color = .white
-    /// A thin dark edge, so white eyes stay visible on the white stripes of the
-    /// 6th–8th Dan belts (user's catch, 29 Oct). nil = no edge.
-    var outline: Color? = nil
 
     var body: some View {
         switch style {
         case .happy:
-            ZStack {
-                if let outline {
-                    HappyEyeShape().stroke(outline, style: StrokeStyle(lineWidth: 4.5, lineCap: .round))
-                }
-                HappyEyeShape().stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            }
+            HappyEyeShape()
+                .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
         case .wide:
-            Circle().fill(color).overlay { edge(Circle()) }.scaleEffect(1.5)
+            Circle().fill(color).scaleEffect(1.5)
         case .sleepy:
-            Capsule().fill(color).overlay { edge(Capsule()) }.scaleEffect(x: 1, y: 0.35).offset(y: 2)
+            Capsule().fill(color).scaleEffect(x: 1, y: 0.35).offset(y: 2)
         case .dizzy:
-            // × eyes: the edge is a wider × underneath.
+            // × eyes
             ZStack {
-                if let outline { cross(outline, thickness: 4.5) }
-                cross(color, thickness: 2.5)
+                Capsule().fill(color).frame(height: 2.5).rotationEffect(.degrees(40))
+                Capsule().fill(color).frame(height: 2.5).rotationEffect(.degrees(-40))
             }
             .scaleEffect(0.8)
         case .focused:
             Capsule()
                 .fill(color)
-                .overlay { edge(Capsule()) }
                 .rotationEffect(.degrees(mirrored ? -10 : 10))
-        }
-    }
-
-    @ViewBuilder
-    private func edge<S: Shape>(_ shape: S) -> some View {
-        if let outline { shape.stroke(outline, lineWidth: 1.2) }
-    }
-
-    private func cross(_ fill: Color, thickness: CGFloat) -> some View {
-        ZStack {
-            Capsule().fill(fill).frame(height: thickness).rotationEffect(.degrees(40))
-            Capsule().fill(fill).frame(height: thickness).rotationEffect(.degrees(-40))
         }
     }
 }

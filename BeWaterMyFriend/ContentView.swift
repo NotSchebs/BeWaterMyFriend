@@ -31,6 +31,7 @@ struct ContentView: View {
             switch url.host() {
             case "new": router.pendingAction = .newDrink
             case "scan": router.pendingAction = .scan
+            case "add": router.pendingAction = .addDrink
             default: break
             }
         }
@@ -54,6 +55,17 @@ struct ContentView: View {
         .animation(.spring(duration: 0.35), value: router.lastLogged?.persistentModelID)
         .fontDesign(.rounded)
         .preferredColorScheme(colorScheme)
+        // Widgets: on opening, turn drinks logged from a widget into real ones and
+        // follow its "+"; on leaving, leave them today's numbers.
+        .onChange(of: scenePhase, initial: true) { _, phase in
+            guard !AppEnvironment.isUITest else { return }
+            if phase == .active {
+                WidgetBridge.drainPending(context: context)
+                WidgetBridge.publish(context: context)
+            } else if phase == .background {
+                WidgetBridge.publish(context: context)
+            }
+        }
         // Background work (Health, goal, reminders): see BackgroundJobs. Skipped in UI tests.
         .task(id: scenePhase) {
             guard scenePhase == .active, !AppEnvironment.isUITest else { return }

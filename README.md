@@ -9,11 +9,12 @@ Mini-Challenge *KI-gestütztes Programmieren (kip)*, HS26 — Sébastien André 
 ## Features
 
 **Logging**
-- Quick log with up to 12 drinks (favourites first), a checkmark and Undo after each tap; search past drinks with +; new drinks ask before joining the Quick log
+- Quick log with up to 12 drinks (long-press to rearrange, remove or add), a checkmark and Undo after each tap; search past drinks with +; new drinks ask before joining the Quick log
 - Drinks can be added for today and the two days before
 - 17 drink types (incl. ready-to-drink protein) with a free-text name, amount, time and optional alcohol %
 - All nutrients that Apple Health supports (38), stored per 100 ml and scaled to the amount
 - Powder drinks (electrolytes, protein): scoop size in grams plus the liquid it was mixed with
+- Home screen widgets (Small, Medium, Large) with today's ring and the drop; your starred drinks (★1–★3) log with one tap
 - Barcode scanning (camera, or type the number) with data from [Open Food Facts](https://world.openfoodfacts.org); every scan is reviewed before saving, and corrections are remembered for that barcode
 
 **Goal and history**

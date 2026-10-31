@@ -93,9 +93,19 @@ struct DrinkEditorView: View {
 
                 Section {
                     TextField("Name, e.g. Rivella Rot", text: $draft.name)
-                    Picker("Type", selection: $draft.category) {
+                    Picker("Type", selection: Binding<DrinkCategory?>(
+                        get: { draft.needsType ? nil : draft.category },
+                        set: { new in
+                            guard let new else { return }
+                            draft.category = new
+                            draft.needsType = false
+                        }
+                    )) {
+                        if draft.needsType {
+                            Text("Choose…").tag(DrinkCategory?.none)
+                        }
                         ForEach(DrinkCategory.allCases) { category in
-                            Label(category.displayName, systemImage: category.symbolName).tag(category)
+                            Label(category.displayName, systemImage: category.symbolName).tag(DrinkCategory?.some(category))
                         }
                     }
                     if draft.category.isPowderMix {
@@ -119,9 +129,7 @@ struct DrinkEditorView: View {
                             Text("ml").foregroundStyle(.secondary)
                         }
                     }
-                    if mode.isPreset {
-                        Toggle("Favourite", isOn: $draft.isFavourite)
-                    } else {
+                    if !mode.isPreset {
                         DatePicker("Time", selection: $draft.timestamp, in: timeRange)
                     }
                 }
@@ -255,22 +263,25 @@ struct DrinkEditorView: View {
         let interval = boundary.interval(forLogicalDay: boundary.logicalDay(for: draft.timestamp))
         let others = recentEntries.filter { $0.persistentModelID != editing?.persistentModelID }
         let dayOthers = others.filter { interval.start <= $0.timestamp && $0.timestamp < interval.end }
-        let drink = draft.makeEntry()
+        // No type yet: nothing is poured in, the drop can't know what it is.
+        let drink = draft.needsType ? nil : draft.makeEntry()
         let before = CompanionLogic.moodState(entries: others, now: draft.timestamp).mood
-        let after = CompanionLogic.moodState(entries: others + [drink], now: draft.timestamp).mood
+        let after = CompanionLogic.moodState(entries: others + [drink].compactMap { $0 }, now: draft.timestamp).mood
         let belt = Belt.belt(forGoalDays: max(bestGoalDays - prestigeBase, 0))
         let ml = DrinkMath.hydrationML(volumeML: draft.volumeML, percent: draft.effectiveHydrationPercent)
         let progressBefore = goalML > 0 ? dayOthers.reduce(0) { $0 + $1.hydrationML } / goalML : 0
-        let progressAfter = goalML > 0 ? progressBefore + ml / goalML : 0
+        let progressAfter = goalML > 0 && drink != nil ? progressBefore + ml / goalML : progressBefore
         return HStack(spacing: 10) {
             NinjaDrop(progress: progressAfter, belt: belt,
-                      layers: CompanionLogic.fillLayers(entries: dayOthers + [drink], goalML: goalML),
+                      layers: CompanionLogic.fillLayers(entries: dayOthers + [drink].compactMap { $0 }, goalML: goalML),
                       mood: after, prestige: prestigeLevel, reaction: reaction)
                 .frame(width: 52, height: 68)
                 .padding(.leading, 4)
                 .padding(.trailing, 16)
-            SpeechBubble(text: Self.previewText(before: before, after: after, ml: ml,
-                                                progressBefore: progressBefore, progressAfter: progressAfter))
+            SpeechBubble(text: draft.needsType
+                         ? "What kind of drink is it? Choose a type and I'll show you."
+                         : Self.previewText(before: before, after: after, ml: ml,
+                                            progressBefore: progressBefore, progressAfter: progressAfter))
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 4)
@@ -359,9 +370,7 @@ struct DrinkEditorView: View {
         let code: String? = barcode
         let existing = try? context.fetch(FetchDescriptor<DrinkPreset>(predicate: #Predicate { $0.barcode == code })).first
         if let existing {
-            var updated = draft
-            updated.isFavourite = existing.isFavourite
-            updated.apply(to: existing)
+            draft.apply(to: existing)
         } else {
             let preset = draft.makePreset(sortOrder: presets.count)
             preset.isInQuickLog = showInQuickLog
@@ -374,6 +383,7 @@ struct DrinkEditorView: View {
         case .editEntry(let entry): EntryActions.delete([entry], in: context)
         case .editPreset(let preset):
             context.delete(preset)
+            DrinkStars.compact(presets.filter { $0 !== preset })
             try? context.save()
         default: break
         }

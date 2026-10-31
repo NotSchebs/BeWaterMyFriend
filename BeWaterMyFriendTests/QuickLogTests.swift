@@ -3,21 +3,55 @@ import XCTest
 
 @MainActor
 final class QuickLogTests: XCTestCase {
-    private func preset(_ name: String, order: Int, favourite: Bool = false, shown: Bool = true) -> DrinkPreset {
-        let p = DrinkPreset(name: name, category: .water, volumeML: 250, isFavourite: favourite, sortOrder: order)
+    private func preset(_ name: String, order: Int, shown: Bool = true) -> DrinkPreset {
+        let p = DrinkPreset(name: name, category: .water, volumeML: 250, sortOrder: order)
         p.isInQuickLog = shown
         return p
     }
 
-    func testQuickLogShowsAtMostTwelveFavouritesFirst() {
+    func testQuickLogShowsAtMostTwelveInTheUsersOrder() {
         var presets = (0..<15).map { preset("Drink \($0)", order: $0) }
-        presets.append(preset("Fav", order: 20, favourite: true))
-        presets.append(preset("Hidden", order: 21, shown: false))
+        presets.append(preset("Hidden", order: -1, shown: false))
         let visible = QuickLogRules.visible(presets)
         XCTAssertEqual(visible.count, 12)
-        XCTAssertEqual(visible.first?.name, "Fav")
+        XCTAssertEqual(visible.first?.name, "Drink 0")
         XCTAssertFalse(visible.contains { $0.name == "Hidden" })
         XCTAssertTrue(QuickLogRules.isFull(presets))
+    }
+
+    func testDraggingATileTakesTheTargetsPlaceBothWays() {
+        let a = preset("A", order: 0), b = preset("B", order: 1), c = preset("C", order: 2), d = preset("D", order: 3)
+        let hidden = preset("Hidden", order: 4, shown: false)
+        let all = [d, hidden, b, a, c]
+        func names() -> [String] { QuickLogRules.visible(all).map(\.name) }
+
+        QuickLogRules.move(a, onto: c, in: all)   // forward
+        XCTAssertEqual(names(), ["B", "C", "A", "D"])
+        QuickLogRules.move(d, onto: b, in: all)   // backward
+        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+        QuickLogRules.move(d, onto: d, in: all)   // onto itself: nothing
+        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+
+        // A star doesn't change the Quick log order.
+        DrinkStars.star(a, in: all)
+        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+    }
+
+    func testMatchingANewTileIsExact() {
+        let coffee = DrinkPreset(name: "Coffee", category: .coffee, volumeML: 250)
+        let cola = DrinkPreset(name: "Cola", category: .softDrink, volumeML: 330, barcode: "5449000000996")
+        var draft = DrinkDraft()
+        draft.name = " coffee "
+        draft.category = .coffee
+        draft.volumeML = 250
+        XCTAssertTrue(QuickLogRules.matching(draft, in: [coffee, cola]) === coffee)
+        draft.volumeML = 500   // a bigger coffee is its own tile
+        XCTAssertNil(QuickLogRules.matching(draft, in: [coffee, cola]))
+        draft.barcode = "5449000000996"
+        XCTAssertTrue(QuickLogRules.matching(draft, in: [coffee, cola]) === cola)
+        XCTAssertEqual(QuickLogRules.nextSortOrder([]), 0)
+        coffee.sortOrder = 7
+        XCTAssertEqual(QuickLogRules.nextSortOrder([coffee, cola]), 8)
     }
 
     func testOlderPresetsWithoutTheFlagAreShown() {
@@ -43,5 +77,72 @@ final class QuickLogTests: XCTestCase {
         let results = DrinkSearch.results(query: "mat", presets: [], entries: entries)
         XCTAssertEqual(results.map(\.draft.name), ["Matcha Latte", "Mate"])
         XCTAssertTrue(DrinkSearch.results(query: "cola", presets: [], entries: entries).isEmpty)
+    }
+}
+
+@MainActor
+final class DrinkStarsTests: XCTestCase {
+    private func drinks(_ names: String...) -> [DrinkPreset] {
+        names.enumerated().map { DrinkPreset(name: $1, category: .water, volumeML: 250, sortOrder: $0) }
+    }
+
+    private func stars(_ presets: [DrinkPreset]) -> [String] {
+        DrinkStars.starred(presets).map { "\($0.starNumber ?? 0)\($0.name)" }
+    }
+
+    func testStarringTakesTheNextNumberUpToThree() {
+        let all = drinks("A", "B", "C", "D")
+        for preset in all.prefix(3) { XCTAssertTrue(DrinkStars.star(preset, in: all)) }
+        XCTAssertEqual(stars(all), ["1A", "2B", "3C"])
+        XCTAssertFalse(DrinkStars.star(all[3], in: all), "a fourth star is refused")
+        XCTAssertNil(all[3].starNumber)
+        XCTAssertTrue(DrinkStars.star(all[0], in: all), "already starred: nothing changes")
+        XCTAssertEqual(stars(all), ["1A", "2B", "3C"])
+    }
+
+    func testUnstarringFreesTheNumberAndOthersMoveUp() {
+        let all = drinks("A", "B", "C", "D")
+        for preset in all.prefix(3) { DrinkStars.star(preset, in: all) }
+        DrinkStars.unstar(all[0], in: all)
+        XCTAssertEqual(stars(all), ["1B", "2C"])
+        DrinkStars.star(all[3], in: all)
+        XCTAssertEqual(stars(all), ["1B", "2C", "3D"])
+    }
+
+    func testChoosingANumberSwapsOrReplaces() {
+        let all = drinks("A", "B", "C", "D")
+        for preset in all.prefix(3) { DrinkStars.star(preset, in: all) }
+        DrinkStars.assign(all[2], number: 1, in: all)
+        XCTAssertEqual(stars(all), ["1C", "2B", "3A"], "swap")
+        DrinkStars.assign(all[3], number: 2, in: all)
+        XCTAssertEqual(stars(all), ["1C", "2D", "3A"], "replace")
+        XCTAssertNil(all[1].starNumber)
+        DrinkStars.assign(all[0], number: 3, in: all)
+        XCTAssertEqual(stars(all), ["1C", "2D", "3A"], "its own number: nothing changes")
+    }
+
+    func testDeletedStarLeavesNoGap() {
+        let all = drinks("A", "B", "C")
+        for preset in all { DrinkStars.star(preset, in: all) }
+        DrinkStars.compact([all[1], all[2]])   // A was deleted
+        XCTAssertEqual(stars([all[1], all[2]]), ["1B", "2C"])
+    }
+
+    func testOldFavouritesMoveToNumbersOnce() {
+        let all = drinks("A", "B", "C", "D", "E")
+        [all[1], all[2], all[3], all[4]].forEach { $0.isFavourite = true }
+        XCTAssertTrue(DrinkStars.migrateOldFavourites(all))
+        XCTAssertEqual(stars(all), ["1B", "2C", "3D"], "the first three in the user's order")
+        XCTAssertFalse(all.contains(where: \.isFavourite))
+        DrinkStars.unstar(all[1], in: all)
+        XCTAssertFalse(DrinkStars.migrateOldFavourites(all), "doesn't run twice")
+        XCTAssertEqual(stars(all), ["1C", "2D"])
+    }
+
+    func testWidgetShowsStarsOrElseTheFirstQuickLogDrinks() {
+        let all = drinks("A", "B", "C", "D")
+        XCTAssertEqual(DrinkStars.widgetDrinks(all).map(\.name), ["A", "B", "C"])
+        DrinkStars.star(all[3], in: all)
+        XCTAssertEqual(DrinkStars.widgetDrinks(all).map(\.name), ["D"])
     }
 }

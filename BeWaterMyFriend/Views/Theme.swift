@@ -5,7 +5,8 @@ import UIKit
 /// and a seigaiha (blue ocean wave) pattern.
 enum Dojo {
     /// Indigo, same as the app's accent colour.
-    static let ink = Color.accentColor
+    /// By name, not `Color.accentColor`: widgets don't get the app's accent colour.
+    static let ink = Color("AccentColor")
     /// Lighter water blue for fills.
     static let water = Color(light: .init(red: 0.33, green: 0.62, blue: 0.93, alpha: 1),
                              dark: .init(red: 0.36, green: 0.62, blue: 0.95, alpha: 1))

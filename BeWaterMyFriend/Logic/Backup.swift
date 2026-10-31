@@ -29,7 +29,9 @@ nonisolated struct BackupFile: Codable, Sendable {
         var hydrationPercent: Double?
         var powderGrams: Double?
         var nutrientsPer100ml: Nutrients
-        var isFavourite: Bool
+        /// Only in backups from before numbered stars.
+        var isFavourite: Bool?
+        var starNumber: Int?
         var sortOrder: Int
         var barcode: String?
         var inQuickLog: Bool
@@ -87,7 +89,7 @@ enum Backup {
             presets: presets.map {
                 .init(name: $0.name, category: $0.categoryRaw, volumeML: $0.volumeML, alcoholPercent: $0.alcoholPercent,
                       hydrationPercent: $0.hydrationPercent, powderGrams: $0.powderGrams,
-                      nutrientsPer100ml: $0.nutrientsPer100ml, isFavourite: $0.isFavourite, sortOrder: $0.sortOrder,
+                      nutrientsPer100ml: $0.nutrientsPer100ml, isFavourite: nil, starNumber: $0.starNumber, sortOrder: $0.sortOrder,
                       barcode: $0.barcode, inQuickLog: $0.isInQuickLog)
             },
             settings: settings
@@ -138,18 +140,22 @@ enum Backup {
         }
 
         var presets = try context.fetch(FetchDescriptor<DrinkPreset>())
+        var importedStars: [(Int, DrinkPreset)] = []
         for p in file.presets {
             let category = DrinkCategory(rawValue: p.category) ?? .other
             guard QuickLogRules.existingPreset(barcode: p.barcode, name: p.name, category: category, in: presets) == nil else { continue }
             let preset = DrinkPreset(name: p.name, category: category, volumeML: p.volumeML, alcoholPercent: p.alcoholPercent,
                                      hydrationPercent: p.hydrationPercent, powderGrams: p.powderGrams,
-                                     nutrientsPer100ml: p.nutrientsPer100ml, isFavourite: p.isFavourite,
+                                     nutrientsPer100ml: p.nutrientsPer100ml,
                                      sortOrder: presets.count, barcode: p.barcode)
             preset.isInQuickLog = p.inQuickLog && !QuickLogRules.isFull(presets)
             context.insert(preset)
+            if p.starNumber != nil || p.isFavourite == true { importedStars.append((p.starNumber ?? .max, preset)) }
             presets.append(preset)
             result.addedPresets += 1
         }
+        // Stars the phone already has stay; imported ones take free numbers, in their order.
+        for (_, preset) in importedStars.sorted(by: { $0.0 < $1.0 }) { DrinkStars.star(preset, in: presets) }
         try context.save()
         // Imported drinks can be older than the archive: count everything again.
         if result.addedDrinks > 0 { defaults.removeObject(forKey: SettingsKey.dojoArchive) }

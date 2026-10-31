@@ -12,10 +12,10 @@ enum DefaultPresets {
         }
 
         return [
-            DrinkPreset(name: "Glass of water", category: .water, volumeML: 250, isFavourite: true, sortOrder: 0),
-            DrinkPreset(name: "Bottle of water", category: .water, volumeML: 500, isFavourite: true, sortOrder: 1),
+            DrinkPreset(name: "Glass of water", category: .water, volumeML: 250, starNumber: 1, sortOrder: 0),
+            DrinkPreset(name: "Bottle of water", category: .water, volumeML: 500, starNumber: 2, sortOrder: 1),
             // ~63 mg per 30 ml shot
-            DrinkPreset(name: "Espresso", category: .coffee, volumeML: 30, nutrientsPer100ml: caffeine(210), isFavourite: true, sortOrder: 2),
+            DrinkPreset(name: "Espresso", category: .coffee, volumeML: 30, nutrientsPer100ml: caffeine(210), starNumber: 3, sortOrder: 2),
             // ~95 mg per 240 ml cup
             DrinkPreset(name: "Coffee", category: .coffee, volumeML: 250, nutrientsPer100ml: caffeine(40), sortOrder: 3),
             // ~30 mg per 250 ml cup

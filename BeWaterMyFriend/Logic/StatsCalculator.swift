@@ -161,9 +161,12 @@ enum StatsInsight {
                 let text = diff < 0
                     ? CompanionLines.pick(["You drink \(n) % less on weekends than on weekdays.",
                                            "Weekends are dry: \(n) % less than on weekdays.",
-                                           "On weekends I get \(n) % less. Thirsty!"], seed: seed)
+                                           "\(n) % less on weekends. Even ninjas train on Saturdays.",
+                                           "Weekends run \(n) % drier. Bring a bottle along?"], seed: seed)
                     : CompanionLines.pick(["You drink \(n) % more on weekends than on weekdays.",
-                                           "Weekends flow: \(n) % more than on weekdays."], seed: seed)
+                                           "Weekends flow: \(n) % more than on weekdays.",
+                                           "\(n) % more on weekends. Rest days suit you.",
+                                           "The weekend ninja strikes: \(n) % more than on weekdays."], seed: seed)
                 if let spot { return Result(text: text, target: .weekday(spot.weekday)) }
             }
         }
@@ -173,9 +176,13 @@ enum StatsInsight {
             let n = Int(abs(change).rounded())
             let text = change > 0
                 ? CompanionLines.pick(["Up \(n) % compared with before. Keep flowing!",
-                                       "\(n) % more than before. I'm growing!"], seed: seed)
+                                       "\(n) % more than before. I'm growing!",
+                                       "Up \(n) %. The current is getting stronger.",
+                                       "\(n) % more than before. Your training shows."], seed: seed)
                 : CompanionLines.pick(["Down \(n) % compared with before. Let's catch up together.",
-                                       "\(n) % less than before. I'm a bit thirsty."], seed: seed)
+                                       "\(n) % less than before. I'm a bit thirsty.",
+                                       "Down \(n) %. Every comeback starts with one sip.",
+                                       "\(n) % less than before. No worries, water finds a way."], seed: seed)
             return Result(text: text, target: .daily(lastLogged.day))
         }
 
@@ -186,14 +193,18 @@ enum StatsInsight {
         let late = caffeine.filter { calendar.component(.hour, from: $0.timestamp) >= 16 }.reduce(0) { $0 + $1.caffeineMg }
         if total >= 100, late / total >= 0.5, let peak = report.points.max(by: { $0.caffeineMg < $1.caffeineMg }) {
             let text = CompanionLines.pick(["Most of your caffeine comes after 4 pm. Might be worth an earlier coffee.",
-                                            "Lots of late coffee: most caffeine after 4 pm. Sleeping well?"], seed: seed)
+                                            "Lots of late coffee: most caffeine after 4 pm. Sleeping well?",
+                                            "Your caffeine likes the evening: most of it comes after 4 pm.",
+                                            "After 4 pm is coffee time, it seems. A ninja also needs sleep."], seed: seed)
             return Result(text: text, target: .caffeine(peak.day))
         }
 
         // 4. Goal rate: on the latest goal day (or the latest logged day).
         let spot = logged.last(where: \.goalReached) ?? lastLogged
         let text = CompanionLines.pick(["You reached your goal on \(report.goalDays) of \(logged.count) logged days.",
-                                        "\(report.goalDays) goal days out of \(logged.count). Osu!"], seed: seed)
+                                        "\(report.goalDays) goal days out of \(logged.count). Osu!",
+                                        "\(logged.count) days logged, \(report.goalDays) with the goal reached. Keep flowing.",
+                                        "\(report.goalDays) of \(logged.count) days on target. Every day is training."], seed: seed)
         return Result(text: text, target: .daily(spot.day))
     }
 }

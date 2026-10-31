@@ -20,7 +20,7 @@ final class BackupTests: XCTestCase {
         espresso.healthSyncID = UUID()
         espresso.healthWrittenAt = date(2026, 10, 25, 9)
         oldPhone.insert(espresso)
-        oldPhone.insert(DrinkPreset(name: "Espresso", category: .coffee, volumeML: 30, isFavourite: true))
+        oldPhone.insert(DrinkPreset(name: "Espresso", category: .coffee, volumeML: 30, starNumber: 1))
         try oldPhone.save()
         oldDefaults.set(2500.0, forKey: SettingsKey.dailyGoalML)
         oldDefaults.set(42, forKey: SettingsKey.dojoBestGoalDays)

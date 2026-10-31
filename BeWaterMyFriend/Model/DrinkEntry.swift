@@ -125,7 +125,10 @@ final class DrinkPreset {
     var powderGrams: Double?
     /// Encoded `Nutrients`. See `NutrientStorage` for why this isn't stored directly.
     var nutrientsData: Data?
-    var isFavourite: Bool
+    /// Before numbered stars. Only read once, to move old favourites to `starNumber`.
+    var isFavourite: Bool = false
+    /// 1, 2 or 3: this drink's place on the widgets' quick-log buttons (`DrinkStars`).
+    var starNumber: Int?
     var sortOrder: Int
     /// Barcode of a scanned product. Scanning it again uses this preset,
     /// including the user's corrections, instead of the online data.
@@ -147,7 +150,7 @@ final class DrinkPreset {
         hydrationPercent: Double? = nil,
         powderGrams: Double? = nil,
         nutrientsPer100ml: Nutrients = Nutrients(),
-        isFavourite: Bool = false,
+        starNumber: Int? = nil,
         sortOrder: Int = 0,
         barcode: String? = nil
     ) {
@@ -158,7 +161,7 @@ final class DrinkPreset {
         self.hydrationPercent = hydrationPercent
         self.powderGrams = powderGrams
         self.nutrientsData = NutrientStorage.encode(nutrientsPer100ml)
-        self.isFavourite = isFavourite
+        self.starNumber = starNumber
         self.sortOrder = sortOrder
         self.barcode = barcode
     }
