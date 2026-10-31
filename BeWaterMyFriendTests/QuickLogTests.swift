@@ -19,22 +19,25 @@ final class QuickLogTests: XCTestCase {
         XCTAssertTrue(QuickLogRules.isFull(presets))
     }
 
-    func testDraggingATileTakesTheTargetsPlaceBothWays() {
-        let a = preset("A", order: 0), b = preset("B", order: 1), c = preset("C", order: 2), d = preset("D", order: 3)
-        let hidden = preset("Hidden", order: 4, shown: false)
-        let all = [d, hidden, b, a, c]
-        func names() -> [String] { QuickLogRules.visible(all).map(\.name) }
+    func testDraggedTileTakesTheSlotAndOthersShift() {
+        let order = ["A", "B", "C", "D"]
+        XCTAssertEqual(QuickLogRules.moved("A", toSlot: 2, in: order), ["B", "C", "A", "D"], "forward")
+        XCTAssertEqual(QuickLogRules.moved("D", toSlot: 0, in: order), ["D", "A", "B", "C"], "backward")
+        XCTAssertEqual(QuickLogRules.moved("B", toSlot: 1, in: order), order, "its own slot")
+        XCTAssertEqual(QuickLogRules.moved("B", toSlot: 9, in: order), order, "no such slot")
+    }
 
-        QuickLogRules.move(a, onto: c, in: all)   // forward
-        XCTAssertEqual(names(), ["B", "C", "A", "D"])
-        QuickLogRules.move(d, onto: b, in: all)   // backward
-        XCTAssertEqual(names(), ["D", "B", "C", "A"])
-        QuickLogRules.move(d, onto: d, in: all)   // onto itself: nothing
-        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+    func testSavingANewOrderKeepsHiddenDrinksInPlace() {
+        let a = preset("A", order: 0), hidden = preset("Hidden", order: 1, shown: false)
+        let b = preset("B", order: 2), c = preset("C", order: 3)
+        let all = [c, a, hidden, b]
+        QuickLogRules.reorder([c, a, b], in: all)
+        XCTAssertEqual(QuickLogRules.visible(all).map(\.name), ["C", "A", "B"])
+        XCTAssertEqual(hidden.sortOrder, 1, "Settings keeps it where it was")
 
         // A star doesn't change the Quick log order.
-        DrinkStars.star(a, in: all)
-        XCTAssertEqual(names(), ["D", "B", "C", "A"])
+        DrinkStars.star(b, in: all)
+        XCTAssertEqual(QuickLogRules.visible(all).map(\.name), ["C", "A", "B"])
     }
 
     func testMatchingANewTileIsExact() {

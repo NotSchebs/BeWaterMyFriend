@@ -14,15 +14,25 @@ enum QuickLogRules {
         presets.sorted { ($0.sortOrder, $0.name) < ($1.sortOrder, $1.name) }
     }
 
-    /// Drag and drop: `dragged` takes `target`'s place. Hidden presets keep their
-    /// place in the Settings list, because both screens share `sortOrder`.
-    static func move(_ dragged: DrinkPreset, onto target: DrinkPreset, in presets: [DrinkPreset]) {
-        var list = ordered(presets)
-        guard let from = list.firstIndex(where: { $0 === dragged }),
-              let to = list.firstIndex(where: { $0 === target }), from != to else { return }
-        list.remove(at: from)
-        list.insert(dragged, at: to)
+    /// Saves a new Quick log order. Hidden presets keep their place in the Settings
+    /// list, because both screens share `sortOrder`.
+    static func reorder(_ newOrder: [DrinkPreset], in presets: [DrinkPreset]) {
+        var remaining = newOrder[...]
+        let list = ordered(presets).map { preset in
+            guard newOrder.contains(where: { $0 === preset }), let next = remaining.popFirst() else { return preset }
+            return next
+        }
         for (index, preset) in list.enumerated() { preset.sortOrder = index }
+    }
+
+    /// Where everything is after `item` was dragged to `slot`: it takes that place and
+    /// the ones in between shift over, like icons on the home screen.
+    static func moved<Item: Equatable>(_ item: Item, toSlot slot: Int, in order: [Item]) -> [Item] {
+        var result = order
+        guard let from = result.firstIndex(of: item), result.indices.contains(slot) else { return order }
+        result.remove(at: from)
+        result.insert(item, at: slot)
+        return result
     }
 
     /// For adding at the end of the Quick log.

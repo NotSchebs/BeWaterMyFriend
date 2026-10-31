@@ -134,8 +134,7 @@ private struct PlusButton: View {
 
 // MARK: Small
 
-/// Ring, amount, then ★1 bottom left and "+" bottom right. Tapping anywhere but
-/// the ★1 button opens Add drink.
+/// Ring, amount, then ★1 bottom left and "+" bottom right. Anywhere else opens the app.
 struct SmallWidgetView: View {
     var state: WidgetState
 
@@ -151,12 +150,10 @@ struct SmallWidgetView: View {
                 if let first = state.quickDrinks.first {
                     DrinkTileButton(drink: first, position: 0, horizontal: true)
                 }
-                PlusLabel()
+                PlusButton()
             }
             .frame(height: 30)
         }
-        // A Small widget has one link for everything except its buttons.
-        .widgetURL(addDrinkURL)
     }
 }
 

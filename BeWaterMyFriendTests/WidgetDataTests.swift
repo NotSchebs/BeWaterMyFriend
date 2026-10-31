@@ -112,7 +112,7 @@ final class WidgetDataTests: XCTestCase {
 
     /// The widgets' App Group must never move the drink database.
     func testDatabaseStaysInTheAppsOwnFolder() {
-        let url = BeWaterMyFriendApp.storeConfiguration.url
+        let url = DrinkDatabase.storeConfiguration.url
         XCTAssertEqual(url.lastPathComponent, "default.store")
         XCTAssertTrue(url.path.contains("/Library/Application Support/"), url.path)
         XCTAssertFalse(url.path.contains("/AppGroup/"), url.path)

@@ -17,6 +17,8 @@ enum QuickAction: Equatable {
 final class AppRouter {
     static let shared = AppRouter()
     var pendingAction: QuickAction?
+    /// The Quick log edit mode. Here because its Done button floats above everything.
+    var editingQuickLog = false
     /// The drink just logged from the Quick log, shown with Undo at the bottom of the screen.
     var lastLogged: DrinkEntry?
     private var toastToken = UUID()

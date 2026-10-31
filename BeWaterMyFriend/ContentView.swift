@@ -53,6 +53,20 @@ struct ContentView: View {
             }
         }
         .animation(.spring(duration: 0.35), value: router.lastLogged?.persistentModelID)
+        // Quick log edit mode: right under + and Scan. It floats, so the page doesn't
+        // move when it appears; above the TabView, so no list can catch its taps.
+        .overlay(alignment: .topTrailing) {
+            if router.editingQuickLog {
+                Button("Done") { withAnimation(.snappy) { router.editingQuickLog = false } }
+                    .font(.headline)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .padding(.trailing, 16)
+                    .padding(.top, 50)
+                    .transition(.scale(scale: 0.8, anchor: .topTrailing).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy, value: router.editingQuickLog)
         .fontDesign(.rounded)
         .preferredColorScheme(colorScheme)
         // Widgets: on opening, turn drinks logged from a widget into real ones and

@@ -35,8 +35,8 @@ struct TodayView: View {
     @State private var showAddDrink = false
     @State private var showAlcoholInfo = false
     @State private var flashedPreset: PersistentIdentifier?
-    @State private var editingQuickLog = false
     @State private var showAddToQuickLog = false
+    @Environment(\.dynamicTypeSize) private var typeSize
     private var router = AppRouter.shared
     @Environment(\.scenePhase) private var scenePhase
     @State private var loggedCount = 0
@@ -59,22 +59,6 @@ struct TodayView: View {
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Scan", systemImage: "barcode.viewfinder") { showScanner = true }
-                }
-            }
-            // Right under + and Scan, and hard to miss, wherever the list is scrolled.
-            // A real bar, not an overlay: taps on overlays can fall through to list rows.
-            .safeAreaBar(edge: .top) {
-                if editingQuickLog {
-                    HStack {
-                        Spacer()
-                        Button("Done") { withAnimation(.snappy) { editingQuickLog = false } }
-                            .font(.headline)
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.large)
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .sheet(item: $editor) { mode in
@@ -152,10 +136,10 @@ struct TodayView: View {
             )
 
             Section {
-                QuickLogGrid(presets: sortedPresets, allPresets: presets, flashed: flashedPreset, isEditing: $editingQuickLog,
+                QuickLogGrid(presets: sortedPresets, allPresets: presets, flashed: flashedPreset, isEditing: Bindable(router).editingQuickLog,
                              onTap: { log($0) },
-                             onMove: { dragged, target in
-                                 QuickLogRules.move(dragged, onto: target, in: presets)
+                             onReorder: { order in
+                                 QuickLogRules.reorder(order, in: presets)
                                  try? context.save()
                              },
                              onRemove: { preset in
@@ -165,10 +149,11 @@ struct TodayView: View {
                              },
                              onAdd: { showAddToQuickLog = true })
                 .listRowInsets(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+                .id(Self.quickLogAnchor)
             } header: {
                 Text("Quick log")
             } footer: {
-                if editingQuickLog {
+                if router.editingQuickLog {
                     Text(QuickLogRules.isFull(presets)
                          ? "Drag to rearrange, – to remove, ★ for the widgets. The Quick log is full (\(QuickLogRules.maxItems)): remove one to add another."
                          : "Drag to rearrange, – to remove, + to add, ★ for the widgets.")
@@ -198,10 +183,22 @@ struct TodayView: View {
                 }
             }
         }
+        // In edit mode a drag moves tiles, never the page. With very large text the
+        // grid may not fit on the screen, so scrolling stays on there.
+        .scrollDisabled(router.editingQuickLog && !typeSize.isAccessibilitySize)
+        // Room to bring the Quick log right under Done, however short the list below it is.
+        .contentMargins(.bottom, router.editingQuickLog ? 400 : 0, for: .scrollContent)
+        .onChange(of: router.editingQuickLog) { _, editing in
+            guard editing else { return }
+            // One smooth move, leaving room for the floating Done.
+            withAnimation(.smooth(duration: 0.35)) {
+                scroller.scrollTo(Self.quickLogAnchor, anchor: UnitPoint(x: 0.5, y: 0.13))
+            }
+        }
         }
         .dojoBackground()
         // Leaving the tab ends editing, like leaving the iPhone's home screen edit mode.
-        .onDisappear { editingQuickLog = false }
+        .onDisappear { router.editingQuickLog = false }
         .sheet(isPresented: $showDojo) {
             DojoView(progress: progress, layers: layers, mood: mood, belt: belt, stats: stats,
                      goalDays: goalDays, prestige: prestigeLevel) {
@@ -298,6 +295,8 @@ struct TodayView: View {
 
     /// Scroll target for tapping the ring.
     private static let drinksAnchor = "todaysDrinks"
+    /// Scroll target when the Quick log edit mode starts.
+    private static let quickLogAnchor = "quickLog"
 
     private func progressHeader(summary: DaySummary, progress: Double, layers: [FillLayer],
                                 legend: [TintTotal], onRingTap: @escaping () -> Void) -> some View {

@@ -14,8 +14,7 @@ struct BeWaterMyFriendApp: App {
             container = PreviewData.container
         } else {
             do {
-                container = try ModelContainer(for: DrinkEntry.self, DrinkPreset.self,
-                                               configurations: Self.storeConfiguration)
+                container = try DrinkDatabase.makeContainer()
             } catch {
                 fatalError("Could not open the drink database: \(error)")
             }
@@ -28,11 +27,6 @@ struct BeWaterMyFriendApp: App {
         notificationHandler = NotificationHandler(container: container)
         UNUserNotificationCenter.current().delegate = notificationHandler
     }
-
-    /// `groupContainer: .none` is essential: with an App Group in the entitlements,
-    /// SwiftData would otherwise silently open a new, empty database in the shared
-    /// folder, and the user's drinks would look gone (found 31 Oct, before release).
-    static let storeConfiguration = ModelConfiguration(groupContainer: .none)
 
     var body: some Scene {
         WindowGroup {
